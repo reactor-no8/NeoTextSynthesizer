@@ -1,0 +1,34 @@
+[build-system]
+requires = ["scikit-build-core>=0.10", "nanobind>=2.0"]
+build-backend = "scikit_build_core.build"
+
+[project]
+name = "neots"
+version = "0.1.0"
+description = "NeoTextSynthesizer - High-performance OCR training data generator"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "MIT"}
+dependencies = [
+    "numpy>=1.24",
+    "Pillow>=9.0",
+    "datasets>=2.0",
+    "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+]
+
+[project.scripts]
+neots = "neots.cli:main"
+flat-wiki = "neots.cli:flat_wiki_main"
+
+[tool.scikit-build]
+wheel.packages = ["python/neots"]
+cmake.build-type = "Release"
+cmake.define = {"SKBUILD" = "ON"}
+
+[project.urls]
+Homepage = "https://github.com/reactor-no8/NeoTextSynthesizer"
