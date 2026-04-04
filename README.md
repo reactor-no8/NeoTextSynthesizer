@@ -12,7 +12,7 @@ NeoTextSynthesizer generates realistic text images with diverse fonts, backgroun
 - **Rich Visual Effects**: Random fonts, font sizes, scale variations, italic/underline/strikethrough effects, diverse backgrounds (solid colors, gradients, real images)
 - **Python Integration**: Full Python API via nanobind with NumPy/PIL support
 - **CLI Tools**: `neots` for workspace initialization and batch generation, `flat-wiki` for Wikipedia corpus generation
-- **Cross-platform**: Builds on Linux (x86_64/aarch64), macOS (x86_64/arm64), and Windows (x86_64)
+- **Cross-platform**: Supports Linux x86_64, Linux AArch64, macOS ARM64, and Windows x86_64
 
 ## Installation
 
@@ -217,15 +217,53 @@ Each line contains:
 
 ## Development
 
-This project uses [pixi](https://pixi.sh) for C++ dependency management and [scikit-build-core](https://scikit-build-core.readthedocs.io/) + [nanobind](https://nanobind.readthedocs.io/) for the Python/C++ bridge.
+This project uses [vcpkg](https://github.com/microsoft/vcpkg) to manage native C++ dependencies, and uses [scikit-build-core](https://scikit-build-core.readthedocs.io/) + [nanobind](https://nanobind.readthedocs.io/) for the Python/C++ bridge. Development is now based on configuring the environment with vcpkg and building from source.
 
-```bash
-# Install pixi environment (includes cmake, ninja, opencv, freetype, etc.)
-pixi install
+### Supported Platforms
 
-# Build from source for development
+- Linux x86_64
+- Linux AArch64
+- macOS ARM64
+- Windows x86_64
+
+### Build from Source with vcpkg
+
+#### Windows
+
+```powershell
+git clone https://github.com/microsoft/vcpkg.git
+.\vcpkg\bootstrap-vcpkg.bat
+$env:CMAKE_TOOLCHAIN_FILE="$PWD\vcpkg\scripts\buildsystems\vcpkg.cmake"
 pip install -e . --no-build-isolation
 ```
+
+#### macOS
+
+```bash
+git clone https://github.com/microsoft/vcpkg.git
+./vcpkg/bootstrap-vcpkg.sh
+export CMAKE_TOOLCHAIN_FILE="$PWD/vcpkg/scripts/buildsystems/vcpkg.cmake"
+pip install -e . --no-build-isolation
+```
+
+#### Linux
+
+```bash
+git clone https://github.com/microsoft/vcpkg.git
+./vcpkg/bootstrap-vcpkg.sh
+export CMAKE_TOOLCHAIN_FILE="$PWD/vcpkg/scripts/buildsystems/vcpkg.cmake"
+pip install -e . --no-build-isolation
+```
+
+If you prefer to build the native extension directly with CMake, make sure `CMAKE_TOOLCHAIN_FILE` points to the vcpkg toolchain before configuring the project.
+
+## Donate
+
+This project is maintained by a single person, so the documentation is not yet fully comprehensive and the feature set is still relatively limited.
+
+If you would like to support the project, the most valuable help is:
+- submitting pull requests
+- actively opening issues when you encounter problems during usage
 
 ## License
 
