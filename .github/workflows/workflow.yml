@@ -44,16 +44,13 @@ jobs:
           echo "VCPKG_CACHE_PATH=$fixed_path/.vcpkg_cache" >> $env:GITHUB_ENV
           echo "VCPKG_INSTALLED_DIR=$fixed_path/vcpkg_installed" >> $env:GITHUB_ENV
 
-      - name: Create vcpkg cache directory
-        run: mkdir -p .vcpkg_cache
-
       - name: Cache vcpkg binaries
         uses: actions/cache@v4
         with:
           path: .vcpkg_cache
-          key: vcpkg-${{ matrix.os }}_${{ matrix.arch }}_${{ hashFiles('vcpkg.json') }}
+          key: vcpkg-os_${{ matrix.os }}-arch_${{ matrix.arch }}-${{ hashFiles('vcpkg.json') }}
           restore-keys: |
-            vcpkg-${{ matrix.os }}-${{ matrix.arch }}-
+            vcpkg-os_${{ matrix.os }}-arch_${{ matrix.arch }}-
 
       - name: Build wheels
         uses: pypa/cibuildwheel@v2.22
@@ -72,19 +69,17 @@ jobs:
             ( [ -d /opt/vcpkg ] || git clone https://github.com/microsoft/vcpkg.git /opt/vcpkg ) &&
             /opt/vcpkg/bootstrap-vcpkg.sh -disableMetrics &&
             cd {project} &&
-            mkdir -p .vcpkg_cache &&
-            export VCPKG_BINARY_SOURCES="clear;files,/project/.vcpkg_cache,readwrite" &&
+            mkdir -p /host${{ github.workspace }}/.vcpkg_cache &&
             /opt/vcpkg/vcpkg install
 
           CIBW_ENVIRONMENT_LINUX: >
             VCPKG_FORCE_SYSTEM_BINARIES=1
-            VCPKG_BINARY_SOURCES="clear;files,/project/.vcpkg_cache,readwrite"
+            VCPKG_BINARY_SOURCES="clear;files,/host${{ github.workspace }}/.vcpkg_cache,readwrite"
             CMAKE_ARGS="-DCMAKE_TOOLCHAIN_FILE=/opt/vcpkg/scripts/buildsystems/vcpkg.cmake -DVCPKG_INSTALLED_DIR=/project/vcpkg_installed -DVCPKG_BUILD_TYPE=release"
 
           CIBW_BEFORE_ALL_MACOS: >
             cd {project} &&
-            mkdir -p .vcpkg_cache &&
-            export VCPKG_BINARY_SOURCES="clear;files,{project}/.vcpkg_cache,readwrite" &&
+            mkdir -p ${{ github.workspace }}/.vcpkg_cache &&
             $VCPKG_INSTALLATION_ROOT/vcpkg install
 
           CIBW_ENVIRONMENT_MACOS: >
@@ -93,12 +88,16 @@ jobs:
 
           CIBW_BEFORE_ALL_WINDOWS: >
             cd /d {project} &&
-            if not exist .vcpkg_cache mkdir .vcpkg_cache &&
+            if not exist "${{ env.VCPKG_CACHE_PATH }}" mkdir "${{ env.VCPKG_CACHE_PATH }}" &&
             C:/vcpkg/vcpkg.exe install --triplet x64-windows-static-md
 
           CIBW_ENVIRONMENT_WINDOWS: >
             VCPKG_BINARY_SOURCES="clear;files,${{ env.VCPKG_CACHE_PATH }},readwrite"
             CMAKE_ARGS="-DCMAKE_TOOLCHAIN_FILE=C:/vcpkg/scripts/buildsystems/vcpkg.cmake -DVCPKG_INSTALLED_DIR=${{ env.VCPKG_INSTALLED_DIR }} -DVCPKG_BUILD_TYPE=release -DVCPKG_TARGET_TRIPLET=x64-windows-static-md"
+
+      - name: Fix cache permissions on Linux
+        if: runner.os == 'Linux'
+        run: sudo chown -R $USER:$USER .vcpkg_cache
 
       - uses: actions/upload-artifact@v4
         with:
