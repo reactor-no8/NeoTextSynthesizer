@@ -73,6 +73,7 @@ jobs:
             /opt/vcpkg/bootstrap-vcpkg.sh -disableMetrics &&
             cd {project} &&
             mkdir -p .vcpkg_cache &&
+            export VCPKG_BINARY_SOURCES="clear;files,/project/.vcpkg_cache,readwrite" &&
             /opt/vcpkg/vcpkg install
 
           CIBW_ENVIRONMENT_LINUX: >
@@ -83,6 +84,7 @@ jobs:
           CIBW_BEFORE_ALL_MACOS: >
             cd {project} &&
             mkdir -p .vcpkg_cache &&
+            export VCPKG_BINARY_SOURCES="clear;files,/project/.vcpkg_cache,readwrite" &&
             $VCPKG_INSTALLATION_ROOT/vcpkg install
 
           CIBW_ENVIRONMENT_MACOS: >
