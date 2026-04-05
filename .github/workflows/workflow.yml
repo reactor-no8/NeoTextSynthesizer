@@ -37,12 +37,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup vcpkg GitHub Actions Cache
-        uses: actions/github-script@v7
+      - name: Cache vcpkg binaries
+        uses: actions/cache@v4
         with:
-          script: |
-            core.exportVariable('ACTIONS_CACHE_URL', process.env.ACTIONS_CACHE_URL || '');
-            core.exportVariable('ACTIONS_RUNTIME_TOKEN', process.env.ACTIONS_RUNTIME_TOKEN || '');
+          path: .vcpkg_cache
+          key: vcpkg-${{ matrix.os }}-${{ matrix.arch }}-${{ hashFiles('vcpkg.json') }}
+          restore-keys: |
+            vcpkg-${{ matrix.os }}-${{ matrix.arch }}-
 
       - name: Build wheels
         uses: pypa/cibuildwheel@v2.22
@@ -54,10 +55,6 @@ jobs:
           CIBW_SKIP: "*-musllinux_* *_i686 *-win32"
           CIBW_ARCHS: ${{ matrix.cibw_archs }}
 
-          VCPKG_BINARY_SOURCES: "clear;gha,readwrite"
-          ACTIONS_CACHE_URL: ${{ env.ACTIONS_CACHE_URL }}
-          ACTIONS_RUNTIME_TOKEN: ${{ env.ACTIONS_RUNTIME_TOKEN }}
-
           CIBW_BEFORE_ALL_LINUX: >
             yum install -y curl zip unzip tar pkgconfig perl-IPC-Cmd gcc gcc-c++ &&
             pip install cmake ninja &&
@@ -65,26 +62,30 @@ jobs:
             ( [ -d /opt/vcpkg ] || git clone https://github.com/microsoft/vcpkg.git /opt/vcpkg ) &&
             /opt/vcpkg/bootstrap-vcpkg.sh -disableMetrics &&
             cd {project} &&
+            mkdir -p .vcpkg_cache &&
             /opt/vcpkg/vcpkg install
-
-          CIBW_ENVIRONMENT_PASS_LINUX: VCPKG_BINARY_SOURCES ACTIONS_CACHE_URL ACTIONS_RUNTIME_TOKEN
 
           CIBW_ENVIRONMENT_LINUX: >
             VCPKG_FORCE_SYSTEM_BINARIES=1
+            VCPKG_BINARY_SOURCES="clear;files,{project}/.vcpkg_cache,readwrite"
             CMAKE_ARGS="-DCMAKE_TOOLCHAIN_FILE=/opt/vcpkg/scripts/buildsystems/vcpkg.cmake -DVCPKG_INSTALLED_DIR={project}/vcpkg_installed -DVCPKG_BUILD_TYPE=release"
 
           CIBW_BEFORE_ALL_MACOS: >
             cd {project} &&
+            mkdir -p .vcpkg_cache &&
             $VCPKG_INSTALLATION_ROOT/vcpkg install
 
           CIBW_ENVIRONMENT_MACOS: >
+            VCPKG_BINARY_SOURCES="clear;files,{project}/.vcpkg_cache,readwrite"
             CMAKE_ARGS="-DCMAKE_TOOLCHAIN_FILE=$VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake -DVCPKG_INSTALLED_DIR={project}/vcpkg_installed -DVCPKG_BUILD_TYPE=release"
 
           CIBW_BEFORE_ALL_WINDOWS: >
             cd /d {project} &&
+            if not exist .vcpkg_cache mkdir .vcpkg_cache &&
             C:/vcpkg/vcpkg.exe install --triplet x64-windows-static-md
 
           CIBW_ENVIRONMENT_WINDOWS: >
+            VCPKG_BINARY_SOURCES="clear;files,{project}/.vcpkg_cache,readwrite"
             CMAKE_ARGS="-DCMAKE_TOOLCHAIN_FILE=C:/vcpkg/scripts/buildsystems/vcpkg.cmake -DVCPKG_INSTALLED_DIR={project}/vcpkg_installed -DVCPKG_BUILD_TYPE=release -DVCPKG_TARGET_TRIPLET=x64-windows-static-md"
 
       - uses: actions/upload-artifact@v4
