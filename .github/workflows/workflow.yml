@@ -67,11 +67,10 @@ jobs:
             cd {project} &&
             /opt/vcpkg/vcpkg install
 
+          CIBW_ENVIRONMENT_PASS_LINUX: VCPKG_BINARY_SOURCES ACTIONS_CACHE_URL ACTIONS_RUNTIME_TOKEN
+
           CIBW_ENVIRONMENT_LINUX: >
             VCPKG_FORCE_SYSTEM_BINARIES=1
-            VCPKG_BINARY_SOURCES="clear;x-gha,readwrite"
-            ACTIONS_CACHE_URL=$ACTIONS_CACHE_URL
-            ACTIONS_RUNTIME_TOKEN=$ACTIONS_RUNTIME_TOKEN
             CMAKE_ARGS="-DCMAKE_TOOLCHAIN_FILE=/opt/vcpkg/scripts/buildsystems/vcpkg.cmake -DVCPKG_INSTALLED_DIR={project}/vcpkg_installed -DVCPKG_BUILD_TYPE=release"
 
           CIBW_BEFORE_ALL_MACOS: >
@@ -79,9 +78,6 @@ jobs:
             $VCPKG_INSTALLATION_ROOT/vcpkg install
 
           CIBW_ENVIRONMENT_MACOS: >
-            VCPKG_BINARY_SOURCES="clear;x-gha,readwrite"
-            ACTIONS_CACHE_URL=$ACTIONS_CACHE_URL
-            ACTIONS_RUNTIME_TOKEN=$ACTIONS_RUNTIME_TOKEN
             CMAKE_ARGS="-DCMAKE_TOOLCHAIN_FILE=$VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake -DVCPKG_INSTALLED_DIR={project}/vcpkg_installed -DVCPKG_BUILD_TYPE=release"
 
           CIBW_BEFORE_ALL_WINDOWS: >
@@ -89,9 +85,6 @@ jobs:
             C:/vcpkg/vcpkg.exe install --triplet x64-windows-static-md
 
           CIBW_ENVIRONMENT_WINDOWS: >
-            VCPKG_BINARY_SOURCES="clear;x-gha,readwrite"
-            ACTIONS_CACHE_URL=$ACTIONS_CACHE_URL
-            ACTIONS_RUNTIME_TOKEN=$ACTIONS_RUNTIME_TOKEN
             CMAKE_ARGS="-DCMAKE_TOOLCHAIN_FILE=C:/vcpkg/scripts/buildsystems/vcpkg.cmake -DVCPKG_INSTALLED_DIR={project}/vcpkg_installed -DVCPKG_BUILD_TYPE=release -DVCPKG_TARGET_TRIPLET=x64-windows-static-md"
 
       - uses: actions/upload-artifact@v4
