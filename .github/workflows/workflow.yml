@@ -88,6 +88,8 @@ jobs:
             cd /d {project} &&
             C:/vcpkg/vcpkg.exe install
 
+          CIBW_BEFORE_BUILD_WINDOWS: "pip install delvewheel"
+          CIBW_REPAIR_WHEEL_COMMAND_WINDOWS: "delvewheel repair --add-path {project}/vcpkg_installed/x64-windows/bin -w {dest_dir} {wheel}"
 
           CIBW_ENVIRONMENT_WINDOWS: >
             VCPKG_BINARY_SOURCES="clear;x-gha,readwrite"
