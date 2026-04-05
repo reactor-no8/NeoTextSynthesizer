@@ -54,7 +54,7 @@ jobs:
           CIBW_SKIP: "*-musllinux_* *_i686 *-win32"
           CIBW_ARCHS: ${{ matrix.cibw_archs }}
 
-          VCPKG_BINARY_SOURCES: "clear;x-gha,readwrite"
+          VCPKG_BINARY_SOURCES: "clear;gha,readwrite"
           ACTIONS_CACHE_URL: ${{ env.ACTIONS_CACHE_URL }}
           ACTIONS_RUNTIME_TOKEN: ${{ env.ACTIONS_RUNTIME_TOKEN }}
 
