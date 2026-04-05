@@ -37,6 +37,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Fix workspace path for Windows
+        if: runner.os == 'Windows'
+        run: |
+          $fixed_path = "${{ github.workspace }}".Replace('\', '/')
+          echo "VCPKG_CACHE_PATH=$fixed_path/.vcpkg_cache" >> $env:GITHUB_ENV
+          echo "VCPKG_INSTALLED_DIR=$fixed_path/vcpkg_installed" >> $env:GITHUB_ENV
+
+      - name: Create vcpkg cache directory
+        run: mkdir -p .vcpkg_cache
+
       - name: Cache vcpkg binaries
         uses: actions/cache@v4
         with:
@@ -85,8 +95,8 @@ jobs:
             C:/vcpkg/vcpkg.exe install --triplet x64-windows-static-md
 
           CIBW_ENVIRONMENT_WINDOWS: >
-            VCPKG_BINARY_SOURCES="clear;files,${{ github.workspace }}/.vcpkg_cache,readwrite"
-            CMAKE_ARGS="-DCMAKE_TOOLCHAIN_FILE=C:/vcpkg/scripts/buildsystems/vcpkg.cmake -DVCPKG_INSTALLED_DIR=${{ github.workspace }}/vcpkg_installed -DVCPKG_BUILD_TYPE=release -DVCPKG_TARGET_TRIPLET=x64-windows-static-md"
+            VCPKG_BINARY_SOURCES="clear;files,${{ env.VCPKG_CACHE_PATH }},readwrite"
+            CMAKE_ARGS="-DCMAKE_TOOLCHAIN_FILE=C:/vcpkg/scripts/buildsystems/vcpkg.cmake -DVCPKG_INSTALLED_DIR=${{ env.VCPKG_INSTALLED_DIR }} -DVCPKG_BUILD_TYPE=release -DVCPKG_TARGET_TRIPLET=x64-windows-static-md"
 
       - uses: actions/upload-artifact@v4
         with:
