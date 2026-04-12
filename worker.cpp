@@ -41,35 +41,40 @@ void BlockingQueue::close() {
 
 void workerTask(int numToGen,
                 TextSampler &sampler,
-                const json &imgCfg,
                 const std::vector<SharedFontMeta> &defaultMeta,
-                const std::vector<SharedFontMeta> &fallbackMeta,
+                std::shared_ptr<MultiFontBitmap<256>> multiFontBitmap,
                 GlyphCache &glyphCache,
                 SharedBgResources &bgRes,
-                BlockingQueue &ioQueue,
                 const json &config,
+                BlockingQueue &ioQueue,
                 std::atomic<int64_t> &globalIndex,
                 const std::vector<int64_t> &hierLevels)
 {
-    // Create a thread-local Renderer with its own FT_Library / FT_Face instances.
-    Renderer renderer(imgCfg, defaultMeta, fallbackMeta, glyphCache, bgRes);
-
     const json &genCfg = config["generate"];
-    int minTargets = genCfg["min_targets"].get<int>();
-    int maxTargets = genCfg["max_targets"].get<int>();
-    int outputHeight = genCfg["output_height"].get<int>();
+    const json &textCfg = config["text_sampler"];
+    const json &bgCfg = config["bg_sampler"];
+    const json &postCfg = config["post_process"];
+    
+    // Create a thread-local Renderer with its own FT_Library / FT_Face instances.
+    Renderer renderer(postCfg, bgCfg, defaultMeta, multiFontBitmap, glyphCache, bgRes);
 
-    int fontSize = imgCfg.value("font_size", 55);
-    double scaleMin = imgCfg.contains("scale_range") ? imgCfg["scale_range"][0].get<double>() : 1.0;
-    double scaleMax = imgCfg.contains("scale_range") ? imgCfg["scale_range"][1].get<double>() : 1.0;
-    bool recomputeWidth = imgCfg.value("recompute_width", false);
-    int mMin = imgCfg["margin_range"][0].get<int>();
-    int mMax = imgCfg["margin_range"][1].get<int>();
-    double offsetProb = imgCfg.value("offset_prob", 0.0);
-    int hOffMin = imgCfg.contains("h_offset_range") ? imgCfg["h_offset_range"][0].get<int>() : 0;
-    int hOffMax = imgCfg.contains("h_offset_range") ? imgCfg["h_offset_range"][1].get<int>() : 0;
-    int vOffMin = imgCfg.contains("v_offset_range") ? imgCfg["v_offset_range"][0].get<int>() : 0;
-    int vOffMax = imgCfg.contains("v_offset_range") ? imgCfg["v_offset_range"][1].get<int>() : 0;
+    int minTargets = textCfg.value("min_targets", 5);
+    int maxTargets = textCfg.value("max_targets", 50);
+    int outputHeight = genCfg["output_height"].get<int>();
+    std::string sampleStrategy = textCfg.value("sample_strategy", "font-first");
+
+    int fontSize = textCfg.value("font_size", 55);
+    const json &pasteCfg = postCfg["text_paste"];
+    double scaleMin = pasteCfg.contains("scale_range") ? pasteCfg["scale_range"][0].get<double>() : 1.0;
+    double scaleMax = pasteCfg.contains("scale_range") ? pasteCfg["scale_range"][1].get<double>() : 1.0;
+    bool recomputeWidth = pasteCfg.value("recompute_width", false);
+    int mMin = pasteCfg["margin_range"][0].get<int>();
+    int mMax = pasteCfg["margin_range"][1].get<int>();
+    double offsetProb = pasteCfg.value("offset_prob", 0.0);
+    int hOffMin = pasteCfg.contains("h_offset_range") ? pasteCfg["h_offset_range"][0].get<int>() : 0;
+    int hOffMax = pasteCfg.contains("h_offset_range") ? pasteCfg["h_offset_range"][1].get<int>() : 0;
+    int vOffMin = pasteCfg.contains("v_offset_range") ? pasteCfg["v_offset_range"][0].get<int>() : 0;
+    int vOffMax = pasteCfg.contains("v_offset_range") ? pasteCfg["v_offset_range"][1].get<int>() : 0;
 
     for (int i = 0; i < numToGen; i++)
     {
@@ -79,7 +84,7 @@ void workerTask(int numToGen,
         BgInfo bgInfo = renderer.getRandomBgPredict();
         cv::Vec3b approxColor = renderer.getBgApproxColor(bgInfo);
 
-        cv::Mat textImg = renderer.renderTightText(text, approxColor);
+        cv::Mat textImg = renderer.renderTightText(text, approxColor, sampleStrategy);
         if (textImg.empty())
         {
             i--; // Retry

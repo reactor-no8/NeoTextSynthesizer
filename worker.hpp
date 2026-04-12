@@ -13,6 +13,8 @@
 
 using json = nlohmann::json;
 
+#include "paged_bitmap.hpp"
+
 // Forward declarations
 class TextSampler;
 class Renderer;
@@ -60,13 +62,12 @@ private:
 // Each worker creates its own thread-local Renderer from the shared resources.
 void workerTask(int numToGen,
                 TextSampler &sampler,
-                const json &imgCfg,
                 const std::vector<SharedFontMeta> &defaultMeta,
-                const std::vector<SharedFontMeta> &fallbackMeta,
+                std::shared_ptr<MultiFontBitmap<256>> multiFontBitmap,
                 GlyphCache &glyphCache,
                 SharedBgResources &bgRes,
-                BlockingQueue &ioQueue,
                 const json &config,
+                BlockingQueue &ioQueue,
                 std::atomic<int64_t> &globalIndex,
                 const std::vector<int64_t> &hierLevels);
 
