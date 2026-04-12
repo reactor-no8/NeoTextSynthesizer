@@ -35,7 +35,7 @@ jobs:
             cibw_archs: AMD64
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Fix workspace path for Windows
         if: runner.os == 'Windows'
@@ -45,7 +45,7 @@ jobs:
           echo "VCPKG_INSTALLED_DIR=$fixed_path/vcpkg_installed" >> $env:GITHUB_ENV
 
       - name: Cache vcpkg binaries
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: .vcpkg_cache
           key: vcpkg-os_${{ matrix.os }}-arch_${{ matrix.arch }}-${{ hashFiles('vcpkg.json') }}
@@ -53,7 +53,7 @@ jobs:
             vcpkg-os_${{ matrix.os }}-arch_${{ matrix.arch }}-
 
       - name: Build wheels
-        uses: pypa/cibuildwheel@v2.22
+        uses: pypa/cibuildwheel@v3
         env:
           CIBW_MANYLINUX_X86_64_IMAGE: manylinux_2_28
           CIBW_MANYLINUX_AARCH64_IMAGE: manylinux_2_28
@@ -99,7 +99,7 @@ jobs:
         if: runner.os == 'Linux'
         run: sudo chown -R $USER:$USER .vcpkg_cache
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: wheels-${{ matrix.os }}-${{ matrix.arch }}
           path: ./wheelhouse/*.whl
@@ -108,12 +108,12 @@ jobs:
     name: Build source distribution
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Build sdist
         run: pipx run build --sdist
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: sdist
           path: dist/*.tar.gz
@@ -126,13 +126,13 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           path: dist
           merge-multiple: true
 
       - name: Upload release assets
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           files: dist/*
 
@@ -144,7 +144,7 @@ jobs:
         id-token: write
       if: github.event_name == 'workflow_dispatch'
       steps:
-        - uses: actions/download-artifact@v4
+        - uses: actions/download-artifact@v8
           with:
             path: dist
             merge-multiple: true
@@ -163,7 +163,7 @@ jobs:
       id-token: write
     if: github.event_name == 'release' && github.event.action == 'published'
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           path: dist
           merge-multiple: true
