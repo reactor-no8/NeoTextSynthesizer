@@ -45,6 +45,7 @@ set(CORE_SOURCES
     worker.cpp
     glyph_cache.cpp
     yaml_utils.cpp
+    paged_bitmap.cpp
     neo_synthesizer.cpp
 )
 
