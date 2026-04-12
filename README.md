@@ -1,6 +1,6 @@
 # NeoTextSynthesizer (neots)
 
-**NeoTextSynthesizer** is a high-performance, multi-threaded synthetic OCR training data generator built with C++.
+**NeoTextSynthesizer** is a high-performance synthetic OCR training data generator built with C++.
 
 NeoTextSynthesizer generates realistic text images with diverse fonts, backgrounds, and visual effects — ideal for training Text Recognition models.
 
