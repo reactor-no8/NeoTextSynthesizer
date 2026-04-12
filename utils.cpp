@@ -136,7 +136,7 @@ bool isFontFile(const std::string &filename)
 {
     std::string lower = filename;
     std::transform(lower.begin(), lower.end(), lower.begin(), ::tolower);
-    for (auto &ext : {".ttf", ".otf"})
+    for (auto &ext : {".ttf", ".otf", ".ttc"})
         if (lower.size() > strlen(ext) && lower.substr(lower.size() - strlen(ext)) == ext)
             return true;
     return false;
