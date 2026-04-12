@@ -9,6 +9,7 @@ import json
 import os
 from importlib import resources as importlib_resources
 from pathlib import Path
+import shutil
 from typing import Optional, Union
 
 import numpy as np
@@ -17,10 +18,9 @@ from neots._core import NeoTextSynthesizer as _NeoTextSynthesizer
 from neots.flatten_wikipedia_generator import FlattenWikipediaGenerator
 
 
-def _load_bundled_config(name: str) -> str:
-    """Load a bundled config file and return its content as a string."""
-    ref = importlib_resources.files("neots") / "data" / "configs" / f"{name}.json"
-    return ref.read_text(encoding="utf-8")
+def _get_bundled_config_path(name: str) -> str:
+    """Get the file path of a bundled default configuration."""
+    return importlib_resources.files("neots") / "data" / "configs" / f"{name}.yaml"
 
 
 class NeoTextSynthesizer:
@@ -86,7 +86,15 @@ class NeoTextSynthesizer:
             raise FileNotFoundError(f"Config file not found: {path}")
         with open(path, "r", encoding="utf-8") as f:
             content = f.read()
-        return cls(content)
+            
+        ext = os.path.splitext(path)[1].lower()
+        if ext in (".yaml", ".yml"):
+            import yaml
+            config = yaml.safe_load(content)
+        else:
+            config = json.loads(content)
+                
+        return cls.from_config(config)
 
     @classmethod
     def from_default(cls, preset: str = "preset") -> "NeoTextSynthesizer":
@@ -113,8 +121,11 @@ class NeoTextSynthesizer:
             raise ValueError(
                 f"Unknown preset '{preset}'. Must be one of: {valid_presets}"
             )
-        content = _load_bundled_config(preset)
-        return cls(content)
+        content = yaml.safe_load(_get_bundled_config_path(preset))
+        import yaml
+        config = yaml.safe_load(content)
+                
+        return cls.from_config(config)
 
     def generate(self, total: int, workers: int = 0, show_progress: bool = True):
         """
@@ -183,16 +194,6 @@ class NeoTextSynthesizer:
         return json.loads(self._impl.get_config_json())
 
     @staticmethod
-    def get_default_config() -> dict:
-        """Get the default preset configuration as a dictionary."""
-        return json.loads(_load_bundled_config("preset"))
-
-    @staticmethod
-    def get_minimal_config() -> dict:
-        """Get the minimal configuration as a dictionary."""
-        return json.loads(_load_bundled_config("minimal"))
-
-    @staticmethod
     def output_default_dict(path: str, type: str = "yaml"):
         """
         Output the default preset configuration to a file.
@@ -204,8 +205,7 @@ class NeoTextSynthesizer:
         type : str
             Format: "yaml" or "json" (default: "yaml").
         """
-        config = json.loads(_load_bundled_config("preset"))
-        _output_config(config, path, type)
+        shutil.copyfile(_get_bundled_config_path("preset"), path)
 
     @staticmethod
     def output_minimal_dict(path: str, type: str = "yaml"):
@@ -219,11 +219,10 @@ class NeoTextSynthesizer:
         type : str
             Format: "yaml" or "json" (default: "yaml").
         """
-        config = json.loads(_load_bundled_config("minimal"))
-        _output_config(config, path, type)
+        shutil.copyfile(_get_bundled_config_path("minimal"), path)
 
 
-def _output_config(config: dict, path: str, fmt: str = "yaml"):
+def output_config(config: dict, path: str, fmt: str = "yaml"):
     """Write a config dictionary to a file in the specified format."""
     if fmt in ("yaml", "yml"):
         try:

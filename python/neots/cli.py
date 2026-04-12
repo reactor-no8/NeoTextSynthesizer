@@ -39,179 +39,6 @@ def _get_data_dir(dirname: str) -> Optional[Path]:
         return None
 
 
-def _generate_readme() -> str:
-    """Generate NEOTS_README.md content."""
-    return """# NeoTextSynthesizer Workspace
-
-Welcome to your NeoTextSynthesizer workspace! This README will help you get started
-with generating synthetic OCR training data.
-
-## Directory Structure
-
-```
-.
-├── config.yaml              # Main configuration file
-├── corpuses/                # Text corpus files (one per language)
-│   ├── zh.txt              # Chinese corpus
-│   ├── en.txt              # English corpus
-│   └── ...                 # Other languages
-├── default_fonts/           # Primary font files (.ttf/.otf)
-├── fallback_fonts/          # Fallback font files (.ttf/.otf)
-├── backgrounds/             # Background images for generation
-├── symbols_characters/      # Character/symbol definition files
-├── generated/               # Output directory for generated images
-└── generated.jsonl          # Output annotation file
-```
-
-## Configuration Guide
-
-### `text_sampler` Section
-
-The `text_sampler` is an array that defines how text is sampled for image generation.
-Each entry has a `type`, a `prob` (probability weight), and a data source.
-
-#### Sequential Type
-Reads text sequentially from a flat text file. Best for natural language corpuses.
-
-```yaml
-text_sampler:
-  - type: sequential
-    prob: 0.20
-    from_file: ./corpuses/zh.txt
-```
-
-#### Random Type
-Randomly samples characters from files or sub-groups. Best for character/symbol sets.
-
-```yaml
-  - type: random
-    prob: 0.20
-    sub_items:
-      - prob: 0.4
-        from_file: ./symbols_characters/characters.txt
-        section: [null, 3500]    # Use only first 3500 lines
-      - prob: 0.3
-        from_file: ./symbols_characters/symbols.txt
-      - prob: 0.1
-        from_string: " "         # Inline character source
-```
-
-#### Key Parameters
-
-| Parameter | Description |
-|-----------|-------------|
-| `type` | `"sequential"` (stream from file) or `"random"` (random sample) |
-| `prob` | Probability weight (all probs are auto-normalized to sum to 1.0) |
-| `from_file` | Path to a text file |
-| `from_string` | Inline text source (e.g., a space character) |
-| `section` | `[start, end]` - Use only a slice of lines. `null` means beginning/end |
-| `sub_items` | Nested sampling groups (recursive structure) |
-| `traditional_prob` | Probability of converting simplified Chinese to traditional |
-
-### `image_processor` Section
-
-Controls the visual appearance of generated images.
-
-| Parameter | Default | Description |
-|-----------|---------|-------------|
-| `bg_image_prob` | 0.3 | Probability of using a real background image |
-| `gray_bg_prob` | 0.7 | Probability of using a gray background (vs colored) |
-| `effect_prob` | 0.2 | Probability of applying text effects |
-| `partial_effect_prob` | 0.8 | Probability that effects apply to only part of the text |
-| `font_size` | 55 | Base font size in pixels |
-| `scale_range` | [0.7, 1.1] | Random scale factor range |
-| `recompute_width` | true | Recompute width after scaling |
-| `margin_range` | [-5, 20] | Random margin range in pixels |
-| `offset_prob` | 0.5 | Probability of applying position offset |
-| `h_offset_range` | [-7, 7] | Horizontal offset range |
-| `v_offset_range` | [-5, 5] | Vertical offset range |
-
-### `generate` Section
-
-Controls the output structure.
-
-| Parameter | Default | Description |
-|-----------|---------|-------------|
-| `min_targets` | 5 | Minimum characters per image |
-| `max_targets` | 50 | Maximum characters per image |
-| `output_height` | 48 | Output image height in pixels |
-| `default_font_dir` | ./default_fonts | Directory for primary fonts |
-| `fallback_font_dir` | ./fallback_fonts | Directory for fallback fonts |
-| `out_jsonl` | ./generated.jsonl | Output annotation file path |
-| `out_dir` | ./generated | Output image directory |
-| `bg_dir` | ./backgrounds | Background images directory |
-| `batchsize` | 10000 | JSONL write batch size |
-| `hierarchical_structure` | [100, 625] | Directory nesting structure |
-
-## Fonts Setup
-
-### Primary Fonts (`default_fonts/`)
-Place your main font files here. These are randomly selected for each generated image.
-The more diverse your font collection, the better your OCR model will generalize.
-
-**Recommended:** Collect 50-200+ diverse fonts covering your target scripts.
-
-### Fallback Fonts (`fallback_fonts/`)
-When a primary font doesn't support certain characters, the system falls back to fonts
-in this directory. Place comprehensive Unicode fonts here (e.g., Noto Sans CJK).
-
-**If no fallback fonts are provided**, the system will attempt to use a system default font:
-- Linux: `/usr/share/fonts/truetype/DejaVuSans.ttf`
-- macOS: `/System/Library/Fonts/Courier New.ttf`
-- Windows: `C:\\Windows\\Fonts\\Arial.ttf`
-
-## Background Images
-
-For more realistic training data, add background images to the `backgrounds/` directory.
-
-**Recommended sources:**
-- **ImageNet-1k (IN-1k)**: Sample diverse real-world images
-- **OpenImages**: Large-scale dataset with varied scenes
-- **COCO**: Common Objects in Context dataset
-- **Your own data**: Screenshots, document scans, photos, etc.
-
-Then set `bg_image_prob` in `image_processor` to control how often real backgrounds are used
-(e.g., `0.3` means 30% of images use a real background, 70% use synthetic colors).
-
-**Supported formats:** `.jpg`, `.jpeg`, `.png`, `.bmp`, `.webp`
-
-## Quick Start
-
-```bash
-# Generate 10,000 images with auto-detected worker count
-neots generate --total 10000
-
-# Generate with custom config and worker count
-neots generate --config my_config.yaml --total 50000 --workers 8
-```
-
-## Python API
-
-```python
-from neots import NeoTextSynthesizer
-
-# Initialize with default config
-synth = NeoTextSynthesizer.from_config_file("config.yaml")
-
-# Batch generate
-synth.generate(total=10000, workers=8)
-
-# Generate single image
-img = synth.generate_instance("Hello World", type="PIL")
-img.save("sample.png")
-
-# Generate as numpy array
-arr = synth.generate_instance("测试文本", type="numpy")
-```
-
-## Tips
-
-1. **Start small**: Begin with a small `--total` to verify your configuration.
-2. **Diverse fonts**: More fonts = better OCR model generalization.
-3. **Real backgrounds**: Even a small `bg_image_prob` (0.1-0.3) significantly improves model robustness.
-4. **Character coverage**: Ensure your fonts cover all characters in your text corpuses.
-5. **Balanced sampling**: Adjust `prob` values to match your target distribution.
-"""
 
 
 def _copy_data_directory(src_dir: Path, dst_dir: str):
@@ -239,29 +66,31 @@ def cmd_init(args):
     print("      and symbol character files from the bundled templates.")
     print()
     print("  [2] Minimal configuration")
-    print("      Empty text_sampler, creates only required directories.")
+    print("      Creates only required directories and a minimal config.yaml.")
     print("      You'll need to prepare your own text corpuses and configure them manually.")
     print()
 
     while True:
-        choice = input("Enter your choice [1/2]: ").strip()
+        choice = input("Enter your choice \033[34m[1/2]\033[0m: ").strip()
         if choice in ("1", "2"):
             break
-        print("Invalid choice. Please enter 1 or 2.")
+        print("\033[33mInvalid choice. Please enter 1 or 2.\033[0m")
 
     if choice == "1":
         _init_preset()
     else:
         _init_minimal()
 
-    # Generate README
-    readme_path = "NEOTS_README.md"
-    with open(readme_path, "w", encoding="utf-8") as f:
-        f.write(_generate_readme())
-    print(f"  Created {readme_path}")
+    # Copy README
+    readme_src = _get_data_path("NEOTS_README.md")
+    if readme_src and readme_src.exists():
+        shutil.copy2(str(readme_src), "NEOTS_README.md")
+        print("  Copied NEOTS_README.md from bundled data")
+    else:
+        print("  Warning: NEOTS_README.md not found in bundled data")
 
     print()
-    print("Initialization complete!")
+    print("\033[32mInitialization complete!\033[0m")
     print("See NEOTS_README.md for detailed usage instructions.")
 
 
@@ -274,7 +103,7 @@ def _init_preset():
     print()
 
     # Create directories
-    for d in ["corpuses", "default_fonts", "fallback_fonts", "backgrounds", "generated"]:
+    for d in ["corpuses", "fonts", "backgrounds", "generated"]:
         os.makedirs(d, exist_ok=True)
         print(f"  Created directory: {d}/")
 
@@ -297,6 +126,12 @@ def _init_preset():
     print("  Generating config.yaml ...")
     NeoTextSynthesizer.output_default_dict("config.yaml", type="yaml")
     print("  Created config.yaml")
+    
+    # Copy default font to fonts/ directory
+    default_font = importlib_resources.files("neots") / "data" / "fonts" / "NotoSerifCJK-Regular.ttc"
+    shutil.copy2(str(default_font), "fonts/NotoSerifCJK-Regular.ttc")
+    
+    print("  Copied default font to fonts/NotoSerifCJK-Regular.ttc")
 
     # Get vocab file path
     vocab_path = _get_data_path("default_dictionary.txt")
@@ -346,14 +181,20 @@ def _init_minimal():
     print()
 
     # Create only required directories
-    for d in ["default_fonts", "fallback_fonts", "backgrounds"]:
+    for d in ["fonts", "backgrounds"]:
         os.makedirs(d, exist_ok=True)
         print(f"  Created directory: {d}/")
 
     # Generate config.yaml from minimal config
     NeoTextSynthesizer.output_minimal_dict("config.yaml", type="yaml")
+    
     print("  Created config.yaml (minimal)")
 
+    # Copy default font to fonts/ directory
+    default_font = importlib_resources.files("neots") / "data" / "fonts" / "NotoSerifCJK-Regular.ttc"
+    shutil.copy2(str(default_font), "fonts/NotoSerifCJK-Regular.ttc")
+    
+    print("  Copied default font to fonts/NotoSerifCJK-Regular.ttc")
 
 def _validate_config(config_path: str) -> dict:
     """Validate a config file and return parsed config dict."""
@@ -377,12 +218,12 @@ def _validate_config(config_path: str) -> dict:
         raise ValueError(f"Config file is empty: '{config_path}'")
 
     # Validate required sections
-    for section in ["text_sampler", "image_processor", "generate"]:
+    for section in ["text_sampler", "random_config", "bg_sampler", "post_process", "generate"]:
         if section not in config:
             raise ValueError(f"Config missing required section: '{section}'")
 
     # Validate sequential items have valid from_file
-    for item in config.get("text_sampler", []):
+    for item in config.get("random_config", []):
         if item.get("type") == "sequential" and "from_file" in item:
             fpath = item["from_file"]
             if not os.path.isfile(fpath):
@@ -444,7 +285,7 @@ def cmd_generate(args):
         sys.exit(1)
 
     print()
-    print("Generation complete!")
+    print("\033[32mGeneration complete!\033[0m")
 
 
 def cmd_help(args=None):

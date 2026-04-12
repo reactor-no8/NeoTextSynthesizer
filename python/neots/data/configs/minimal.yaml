@@ -1,0 +1,37 @@
+text_sampler:
+  min_targets: 5
+  max_targets: 50
+  font_size: 55
+  sample_strategy: "font-first"
+  font_list:
+    - "./fonts"
+
+random_config:
+  - type: random
+    prob: 1.0
+    from_string: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789,.-"
+
+bg_sampler:
+  bg_image_prob: 0.0
+  gray_bg_prob: 0.7
+  bg_list:
+    - "./backgrounds"
+
+post_process:
+  text_effects:
+    effect_prob: 0.2
+    partial_effect_prob: 0.8
+  text_paste:
+    scale_range: [0.7, 1.1]
+    recompute_width: true
+    margin_range: [-5, 20]
+    offset_prob: 0.5
+    h_offset_range: [-7, 7]
+    v_offset_range: [-5, 5]
+
+generate:
+  output_height: 48
+  out_jsonl: ./generated.jsonl
+  out_dir: ./generated
+  batchsize: 10000
+  hierarchical_structure: [100, 625]

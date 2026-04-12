@@ -1,0 +1,94 @@
+text_sampler:
+  min_targets: 5
+  max_targets: 50
+  sample_strategy: "font-first"
+  font_list:
+    - "./fonts"
+
+random_config:
+  - type: sequential
+    prob: 0.20
+    from_file: ./corpuses/zh.txt
+  - type: sequential
+    prob: 0.13
+    from_file: ./corpuses/ja.txt
+  - type: sequential
+    prob: 0.12
+    from_file: ./corpuses/ko.txt
+  - type: sequential
+    prob: 0.10
+    from_file: ./corpuses/en.txt
+  - type: sequential
+    prob: 0.05
+    from_file: ./corpuses/de.txt
+  - type: sequential
+    prob: 0.05
+    from_file: ./corpuses/fr.txt
+  - type: sequential
+    prob: 0.05
+    from_file: ./corpuses/it.txt
+  - type: sequential
+    prob: 0.05
+    from_file: ./corpuses/es.txt
+  - type: sequential
+    prob: 0.05
+    from_file: ./corpuses/ru.txt
+  - type: random
+    prob: 0.20
+    sub_items:
+      - prob: 0.4
+        sub_items:
+          - prob: 0.3
+            from_file: ./symbols_characters/characters.txt
+            section: [null, 3500]
+          - prob: 0.3
+            from_file: ./symbols_characters/characters.txt
+            section: [3500, 6500]
+          - prob: 0.3
+            from_file: ./symbols_characters/characters.txt
+            section: [6500, null]
+          - prob: 0.1
+            from_file: ./symbols_characters/traditional_chars.txt
+        traditional_prob: 0.15
+      - prob: 0.3
+        sub_items:
+          - prob: 0.5
+            sub_items:
+              - prob: 0.5
+                from_file: ./symbols_characters/kokuji.txt
+                section: [null, 91]
+              - prob: 0.5
+                from_file: ./symbols_characters/kokuji.txt
+                section: [91, null]
+          - prob: 0.5
+            from_file: ./symbols_characters/ko_characters.txt
+      - prob: 0.1
+        from_string: " "
+      - prob: 0.2
+        from_file: ./symbols_characters/symbols.txt
+
+bg_sampler:
+  bg_image_prob: 0.3
+  gray_bg_prob: 0.7
+  bg_list:
+    - "./backgrounds"
+
+post_process:
+  font_size: 55
+  text_effects:
+    effect_prob: 0.2
+    partial_effect_prob: 0.8
+  text_paste:
+    scale_range: [0.7, 1.1]
+    recompute_width: true
+    margin_range: [-5, 20]
+    offset_prob: 0.5
+    h_offset_range: [-7, 7]
+    v_offset_range: [-5, 5]
+
+generate:
+  output_height: 48
+  out_jsonl: ./generated.jsonl
+  out_dir: ./generated
+  batchsize: 10000
+  hierarchical_structure: [100, 625]
