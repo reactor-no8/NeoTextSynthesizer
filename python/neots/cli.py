@@ -195,6 +195,12 @@ def _init_minimal():
     shutil.copy2(str(default_font), "fonts/NotoSerifCJK-Regular.ttc")
     
     print("  Copied default font to fonts/NotoSerifCJK-Regular.ttc")
+    
+    # Copy s2t.txt from bundled data
+    s2t_src = _get_data_path("s2t.txt")
+    if s2t_src and s2t_src.exists() and not os.path.exists("s2t.txt"):
+        shutil.copy2(str(s2t_src), "s2t.txt")
+        print("  Copied s2t.txt from bundled data")
 
 def _validate_config(config_path: str) -> dict:
     """Validate a config file and return parsed config dict."""
