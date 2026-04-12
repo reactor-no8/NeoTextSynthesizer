@@ -102,9 +102,26 @@ gen.generate()
 
 ## Configuration
 
-Configuration is structured into three sections. See config.yaml for a complete example after initialization.
+Configuration is structured into four sections. See config.yaml for a complete example after initialization.
 
 ### `text_sampler`
+
+Controls the basic text sampling parameters and font selection strategy.
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `min_targets` | 5 | Minimum characters per image |
+| `max_targets` | 50 | Maximum characters per image |
+| `font_size` | 55 | Base font size in pixels |
+| `sample_strategy` | `"font-first"` | Strategy for handling missing characters: `"font-first"`, `"sample-first"`, or `"auto-fallback"` |
+| `font_list` | `["./fonts"]` | List of font files or directories containing fonts |
+
+#### Sample Strategies
+- **`font-first`**: Selects a font first, then samples text. Any characters not supported by the chosen font are discarded. (Fastest)
+- **`sample-first`**: Samples text first, then finds a font that supports all characters. If none exists, chooses the font with the highest coverage and discards unsupported characters.
+- **`auto-fallback`**: Selects a primary font and samples text. For unsupported characters, it attempts to find a fallback font to render them. (Slowest but most comprehensive)
+
+### `random_config`
 
 Defines how text strings are sampled for rendering. Each entry has a probability weight and a data source.
 
@@ -114,7 +131,7 @@ Defines how text strings are sampled for rendering. Each entry has a probability
 | `random` | Randomly samples from character files or nested sub-groups. |
 
 ```yaml
-text_sampler:
+random_config:
   # Stream Chinese text from a corpus file
   - type: sequential
     prob: 0.20
@@ -138,19 +155,35 @@ Key parameters:
 - `sub_items`: Nested probability groups (recursive)
 - `traditional_prob`: Probability of simplified → traditional Chinese conversion
 
-### `image_processor`
+### `bg_sampler`
 
-Controls visual appearance:
+Controls background selection:
 
 | Parameter | Default | Description |
 |-----------|---------|-------------|
 | `bg_image_prob` | 0.3 | Probability of using a real background image |
 | `gray_bg_prob` | 0.7 | Probability of gray vs. colored background |
+| `bg_list` | `["./backgrounds"]` | List of background image files or directories |
+
+### `post_process`
+
+Controls visual appearance:
+
+#### `text_effects`
+| Parameter | Default | Description |
+|-----------|---------|-------------|
 | `effect_prob` | 0.2 | Probability of text effects (italic/underline/strikethrough) |
-| `font_size` | 55 | Base font size in pixels |
+| `partial_effect_prob` | 0.8 | Probability that effects apply to only part of the text |
+
+#### `text_paste`
+| Parameter | Default | Description |
+|-----------|---------|-------------|
 | `scale_range` | [0.7, 1.1] | Random scale factor range |
+| `recompute_width` | true | Recompute width after scaling |
 | `margin_range` | [-5, 20] | Horizontal margin range (pixels) |
 | `offset_prob` | 0.5 | Probability of random position offset |
+| `h_offset_range` | [-7, 7] | Horizontal offset range |
+| `v_offset_range` | [-5, 5] | Vertical offset range |
 
 ### `generate`
 
@@ -158,29 +191,15 @@ Controls output structure:
 
 | Parameter | Default | Description |
 |-----------|---------|-------------|
-| `min_targets` / `max_targets` | 5 / 50 | Character count range per image |
 | `output_height` | 48 | Output image height (width auto-calculated) |
-| `default_font_dir` | ./default_fonts | Primary fonts directory |
-| `fallback_font_dir` | ./fallback_fonts | Fallback fonts directory |
 | `out_dir` | ./generated | Output image directory |
 | `out_jsonl` | ./generated.jsonl | Annotation file path |
+| `batchsize` | 10000 | JSONL write batch size |
 | `hierarchical_structure` | [100, 625] | Directory nesting levels |
 
 ## Font Setup
 
-### Primary Fonts (`default_fonts/`)
-Place diverse `.ttf` / `.otf` font files here. A random font is selected for each image. **More fonts = better model generalization.** Aim for 50-200+ fonts covering your target scripts.
-
-### Fallback Fonts (`fallback_fonts/`)
-When the primary font doesn't cover certain characters, the system falls back to these fonts. Place comprehensive Unicode fonts here (e.g., Noto Sans CJK, Noto Sans).
-
-### System Default
-If no fallback fonts are provided, the system automatically tries:
-- **Linux**: `/usr/share/fonts/truetype/DejaVuSans.ttf`
-- **macOS**: `/System/Library/Fonts/Courier New.ttf`
-- **Windows**: `C:\Windows\Fonts\Arial.ttf`
-
-If the system font is also unavailable, initialization fails.
+By default, neots uses its built-in default font `NotoSerifCJK-Regular.ttc` in `fonts/`. Place diverse `.ttf` / `.otf` / `.ttc` font files in the `fonts/` directory. The system will automatically index them and use them according to your chosen `sample_strategy`. **More fonts = better model generalization.** Aim for 50-200+ fonts covering your target scripts.
 
 ## Background Images
 
