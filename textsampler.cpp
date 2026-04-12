@@ -258,9 +258,13 @@ const std::vector<std::string> &TextSampler::getDataLines(const json &item)
     std::vector<std::string> lines;
     if (item.contains("from_file"))
     {
-        std::ifstream f(item["from_file"].get<std::string>(), std::ios::binary);
-        if (!f)
-            throw std::runtime_error("Cannot open file: " + item["from_file"].get<std::string>());
+        std::string path = item["from_file"].get<std::string>();
+        std::ifstream f(path, std::ios::binary);
+        if (!f) {
+            std::cout << "\033[33mWarning: Cannot open file: " << path << ". This item will be ignored.\033[0m\n";
+            dataCache_[key] = lines;
+            return dataCache_[key];
+        }
         std::string line;
         while (std::getline(f, line))
         {
@@ -306,8 +310,9 @@ TextSampler::SequentialState &TextSampler::getOrCreateSeqState(const json &item)
         st.shardSize = item["shard_size"].get<int64_t>();
 
     st.stream.open(st.path, std::ios::binary);
-    if (!st.stream)
-        throw std::runtime_error("Cannot open file: " + st.path);
+    if (!st.stream) {
+        std::cout << "\033[33mWarning: Cannot open file: " << st.path << ". This item will be ignored.\033[0m\n";
+    }
 
     // Seek to the start of this shard.
     if (st.shardOffset > 0)
@@ -320,6 +325,8 @@ TextSampler::SequentialState &TextSampler::getOrCreateSeqState(const json &item)
 std::string TextSampler::readSequentialUtf8(SequentialState &st, int targetChars)
 {
     std::string out;
+    if (!st.stream.is_open()) return out;
+    
     out.reserve((size_t)targetChars * 4);
 
     // Helper: how many bytes remain in the current shard pass.
