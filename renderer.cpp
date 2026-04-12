@@ -88,13 +88,14 @@ std::vector<SharedFontMeta> Renderer::buildSharedFontMeta(
         meta.index = indexOffset + out.size();
         meta.ascender = (int)(face->size->metrics.ascender >> 6);
         meta.descender = (int)(face->size->metrics.descender >> 6);
+        meta.bitmap = std::make_shared<SingleFontBitmap>();
 
         // Build cmap
         FT_UInt idx;
         FT_ULong cp = FT_Get_First_Char(face, &idx);
         while (idx != 0)
         {
-            meta.cmap.insert((uint32_t)cp);
+            meta.bitmap->set((uint32_t)cp);
             cp = FT_Get_Next_Char(face, cp, &idx);
         }
         out.push_back(std::move(meta));
@@ -113,36 +114,30 @@ std::vector<std::string> Renderer::listBgFiles(const std::string &dir)
     return files;
 }
 
-Renderer::Renderer(const json &imgCfg,
+Renderer::Renderer(const json &postCfg,
+                   const json &bgCfg,
                    const std::vector<SharedFontMeta> &defaultMeta,
-                   const std::vector<SharedFontMeta> &fallbackMeta,
+                   std::shared_ptr<MultiFontBitmap<256>> multiFontBitmap,
                    GlyphCache &glyphCache,
                    SharedBgResources &bgRes)
-    : imgCfg_(imgCfg),
+    : postCfg_(postCfg),
+      bgCfg_(bgCfg),
       defaultMeta_(defaultMeta),
-      fallbackMeta_(fallbackMeta),
+      multiFontBitmap_(multiFontBitmap),
       glyphCache_(glyphCache),
       bgRes_(bgRes)
 {
-    fontSize_ = imgCfg_.value("font_size", 55);
+    fontSize_ = postCfg_.value("font_size", 55);
 
     if (FT_Init_FreeType(&ftLib_))
         throw std::runtime_error("Failed to init FreeType (per-thread)");
 
     openThreadFonts(defaultMeta_, defaultFonts_);
-    openThreadFonts(fallbackMeta_, fallbackFonts_);
 }
 
 Renderer::~Renderer()
 {
     for (auto &tf : defaultFonts_)
-    {
-        if (tf.hbFont)
-            hb_font_destroy(tf.hbFont);
-        if (tf.ftFace)
-            FT_Done_Face(tf.ftFace);
-    }
-    for (auto &tf : fallbackFonts_)
     {
         if (tf.hbFont)
             hb_font_destroy(tf.hbFont);
@@ -239,7 +234,7 @@ void Renderer::compositeGlyph(cv::Mat &canvas, const CachedGlyph &glyph,
 
 BgInfo Renderer::getRandomBgPredict()
 {
-    if (!bgRes_.bgFiles.empty() && randDouble(0, 1) < imgCfg_.value("bg_image_prob", 0.3))
+    if (!bgRes_.bgFiles.empty() && randDouble(0, 1) < bgCfg_.value("bg_image_prob", 0.3))
     {
         BgInfo bi;
         bi.isImage = true;
@@ -249,7 +244,7 @@ BgInfo Renderer::getRandomBgPredict()
     BgInfo bi;
     bi.isImage = false;
     double h, s_val, v_val;
-    if (randDouble(0, 1) < imgCfg_.value("gray_bg_prob", 0.7))
+    if (randDouble(0, 1) < bgCfg_.value("gray_bg_prob", 0.7))
     {
         double vv = (randDouble(0, 1) < 0.5) ? randInt(0, 50) / 255.0 : randInt(200, 255) / 255.0;
         s_val = randInt(0, 30) / 255.0;
@@ -374,75 +369,206 @@ cv::Vec3b Renderer::getTextColor(const cv::Vec3b &bgColor)
 }
 
 
-cv::Mat Renderer::renderTightText(const std::string &text, const cv::Vec3b &bgColor)
+cv::Mat Renderer::renderTightText(std::string &text, const cv::Vec3b &bgColor, const std::string& sampleStrategy)
 {
-    if (defaultFonts_.empty() && fallbackFonts_.empty())
+    if (defaultFonts_.empty())
         return {};
 
     auto chars = utf8SplitR(text);
     auto codepoints = utf8ToCodepoints(text);
 
     ThreadFont *selectedFont = nullptr;
-    if (!defaultFonts_.empty())
-    {
-        int selectedIdx = randInt(0, (int)defaultFonts_.size() - 1);
-        selectedFont = &defaultFonts_[selectedIdx];
-    }
-    else
-    {
-        int selectedIdx = randInt(0, (int)fallbackFonts_.size() - 1);
-        selectedFont = &fallbackFonts_[selectedIdx];
-    }
-    const SharedFontMeta *selectedMeta = selectedFont->meta;
-    
-    // Select font: pick a random default font, fall back if needed.
-    bool needFallback = false;
-    for (uint32_t cp : codepoints)
-        if (!selectedMeta->cmap.count(cp))
-        {
-            needFallback = true;
-            break;
+    std::vector<ThreadFont*> charFonts(codepoints.size(), nullptr);
+
+    if (sampleStrategy == "font-first") {
+        if (!defaultFonts_.empty()) {
+            int selectedIdx = randInt(0, (int)defaultFonts_.size() - 1);
+            selectedFont = &defaultFonts_[selectedIdx];
         }
-    if (needFallback)
-    {
-        std::vector<int> avail;
-        for (int fi = 0; fi < (int)fallbackFonts_.size(); fi++)
-        {
-            bool ok = true;
-            for (uint32_t cp : codepoints)
-                if (!fallbackFonts_[fi].meta->cmap.count(cp))
-                {
-                    ok = false;
-                    break;
+
+        std::string newText;
+        std::vector<std::string> newChars;
+        std::vector<uint32_t> newCodepoints;
+        for (size_t i = 0; i < codepoints.size(); ++i) {
+            if (selectedFont->meta->bitmap->test(codepoints[i])) {
+                newText += chars[i];
+                newChars.push_back(chars[i]);
+                newCodepoints.push_back(codepoints[i]);
+                charFonts[newCodepoints.size() - 1] = selectedFont;
+            }
+        }
+        text = newText;
+        chars = newChars;
+        codepoints = newCodepoints;
+        charFonts.resize(codepoints.size());
+    } else if (sampleStrategy == "sample-first") {
+        std::bitset<256> mask;
+        mask.set();
+        for (uint32_t cp : codepoints) {
+            mask &= multiFontBitmap_->query(cp);
+            if (mask.none()) break;
+        }
+
+        if (mask.any()) {
+            std::vector<int> avail;
+            for (size_t i = 0; i < defaultFonts_.size(); ++i) {
+                if (mask.test(i)) avail.push_back(i);
+            }
+            if (!avail.empty()) {
+                int pick = avail[randInt(0, (int)avail.size() - 1)];
+                selectedFont = &defaultFonts_[pick];
+                for (size_t i = 0; i < codepoints.size(); ++i) {
+                    charFonts[i] = selectedFont;
                 }
-            if (ok)
-                avail.push_back(fi);
+            }
+        } else {
+            std::vector<int> coverage(defaultFonts_.size(), 0);
+            for (uint32_t cp : codepoints) {
+                std::bitset<256> bs = multiFontBitmap_->query(cp);
+                for (size_t i = 0; i < defaultFonts_.size(); ++i) {
+                    if (bs.test(i)) coverage[i]++;
+                }
+            }
+            int maxCov = -1;
+            std::vector<int> bestFonts;
+            for (size_t i = 0; i < defaultFonts_.size(); ++i) {
+                if (coverage[i] > maxCov) {
+                    maxCov = coverage[i];
+                    bestFonts = {(int)i};
+                } else if (coverage[i] == maxCov) {
+                    bestFonts.push_back(i);
+                }
+            }
+            if (!bestFonts.empty()) {
+                int pick = bestFonts[randInt(0, (int)bestFonts.size() - 1)];
+                selectedFont = &defaultFonts_[pick];
+                
+                std::string newText;
+                std::vector<std::string> newChars;
+                std::vector<uint32_t> newCodepoints;
+                for (size_t i = 0; i < codepoints.size(); ++i) {
+                    if (selectedFont->meta->bitmap->test(codepoints[i])) {
+                        newText += chars[i];
+                        newChars.push_back(chars[i]);
+                        newCodepoints.push_back(codepoints[i]);
+                        charFonts[newCodepoints.size() - 1] = selectedFont;
+                    }
+                }
+                text = newText;
+                chars = newChars;
+                codepoints = newCodepoints;
+                charFonts.resize(codepoints.size());
+            }
         }
-        if (!avail.empty())
-        {
-            int pick = avail[randInt(0, (int)avail.size() - 1)];
-            selectedFont = &fallbackFonts_[pick];
-            selectedMeta = selectedFont->meta;
+    } else if (sampleStrategy == "auto-fallback") {
+        if (!defaultFonts_.empty()) {
+            int selectedIdx = randInt(0, (int)defaultFonts_.size() - 1);
+            selectedFont = &defaultFonts_[selectedIdx];
         }
-        else if (!fallbackFonts_.empty())
-        {
-            int pick = randInt(0, (int)fallbackFonts_.size() - 1);
-            selectedFont = &fallbackFonts_[pick];
-            selectedMeta = selectedFont->meta;
+
+        std::vector<size_t> unhandledIdx;
+        for (size_t i = 0; i < codepoints.size(); ++i) {
+            if (selectedFont->meta->bitmap->test(codepoints[i])) {
+                charFonts[i] = selectedFont;
+            } else {
+                unhandledIdx.push_back(i);
+            }
+        }
+
+        if (!unhandledIdx.empty()) {
+            std::bitset<256> mask;
+            mask.set();
+            for (size_t idx : unhandledIdx) {
+                mask &= multiFontBitmap_->query(codepoints[idx]);
+            }
+
+            ThreadFont* fallbackFont = nullptr;
+            if (mask.any()) {
+                std::vector<int> avail;
+                for (size_t i = 0; i < defaultFonts_.size(); ++i) {
+                    if (mask.test(i)) avail.push_back(i);
+                }
+                if (!avail.empty()) {
+                    int pick = avail[randInt(0, (int)avail.size() - 1)];
+                    fallbackFont = &defaultFonts_[pick];
+                    for (size_t idx : unhandledIdx) {
+                        charFonts[idx] = fallbackFont;
+                    }
+                    unhandledIdx.clear();
+                }
+            } else {
+                std::vector<int> coverage(defaultFonts_.size(), 0);
+                for (size_t idx : unhandledIdx) {
+                    std::bitset<256> bs = multiFontBitmap_->query(codepoints[idx]);
+                    for (size_t i = 0; i < defaultFonts_.size(); ++i) {
+                        if (bs.test(i)) coverage[i]++;
+                    }
+                }
+                int maxCov = -1;
+                std::vector<int> bestFonts;
+                for (size_t i = 0; i < defaultFonts_.size(); ++i) {
+                    if (coverage[i] > maxCov) {
+                        maxCov = coverage[i];
+                        bestFonts = {(int)i};
+                    } else if (coverage[i] == maxCov) {
+                        bestFonts.push_back(i);
+                    }
+                }
+                if (!bestFonts.empty()) {
+                    int pick = bestFonts[randInt(0, (int)bestFonts.size() - 1)];
+                    fallbackFont = &defaultFonts_[pick];
+                    
+                    std::vector<size_t> stillUnhandled;
+                    for (size_t idx : unhandledIdx) {
+                        if (fallbackFont->meta->bitmap->test(codepoints[idx])) {
+                            charFonts[idx] = fallbackFont;
+                        } else {
+                            stillUnhandled.push_back(idx);
+                        }
+                    }
+                    unhandledIdx = stillUnhandled;
+                }
+            }
+
+            if (!unhandledIdx.empty()) {
+                std::string newText;
+                std::vector<std::string> newChars;
+                std::vector<uint32_t> newCodepoints;
+                std::vector<ThreadFont*> newCharFonts;
+                
+                size_t unhandledPtr = 0;
+                for (size_t i = 0; i < codepoints.size(); ++i) {
+                    if (unhandledPtr < unhandledIdx.size() && unhandledIdx[unhandledPtr] == i) {
+                        unhandledPtr++;
+                    } else {
+                        newText += chars[i];
+                        newChars.push_back(chars[i]);
+                        newCodepoints.push_back(codepoints[i]);
+                        newCharFonts.push_back(charFonts[i]);
+                    }
+                }
+                text = newText;
+                chars = newChars;
+                codepoints = newCodepoints;
+                charFonts = newCharFonts;
+            }
         }
     }
+
+    if (chars.empty()) return {};
 
     cv::Vec3b textColorBGR = getTextColor(bgColor);
     cv::Vec4b textColor(textColorBGR[0], textColorBGR[1], textColorBGR[2], 255);
 
-    bool applyEffect = randDouble(0, 1) < imgCfg_.value("effect_prob", 0.2);
+    const json& effectsCfg = postCfg_.contains("text_effects") ? postCfg_["text_effects"] : json::object();
+    bool applyEffect = randDouble(0, 1) < effectsCfg.value("effect_prob", 0.2);
     std::string activeEffect;
     std::set<int> effectRange;
     if (applyEffect)
     {
         static const char *effects[] = {"italic", "underline", "strikethrough"};
         activeEffect = effects[randInt(0, 2)];
-        if (randDouble(0, 1) < imgCfg_.value("partial_effect_prob", 0.8))
+        if (randDouble(0, 1) < effectsCfg.value("partial_effect_prob", 0.8))
         {
             int length = randInt(3, 10);
             int start = randInt(0, std::max(0, (int)chars.size() - length));
@@ -469,7 +595,7 @@ cv::Mat Renderer::renderTightText(const std::string &text, const cv::Vec3b &bgCo
         uint32_t cp = codepoints[i];
 
         // Get the glyph (from cache or rasterise via thread-local FT_Face).
-        const CachedGlyph *glyph = getGlyph(*selectedFont, cp);
+        const CachedGlyph *glyph = getGlyph(*charFonts[i], cp);
         if (!glyph)
             continue;
 
@@ -556,8 +682,8 @@ cv::Mat Renderer::renderTightText(const std::string &text, const cv::Vec3b &bgCo
 
     // Expand vertical bounding box to match font metrics (ascender/descender).
     // These values come from SharedFontMeta, which is immutable after construction.
-    int ascender = selectedMeta->ascender;
-    int descender = selectedMeta->descender;
+    int ascender = charFonts[0]->meta->ascender;
+    int descender = charFonts[0]->meta->descender;
     int fontTop = yOffset - ascender;
     int fontBottom = yOffset - descender;
 

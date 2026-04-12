@@ -11,95 +11,73 @@
 
 namespace fs = std::filesystem;
 
-std::string NeoTextSynthesizer::getSystemFontPath()
-{
-#if defined(_WIN32) || defined(_WIN64)
-    return "C:\\Windows\\Fonts\\Arial.ttf";
-#elif defined(__APPLE__)
-    return "/System/Library/Fonts/Courier New.ttf";
-#else
-    // Linux
-    return "/usr/share/fonts/truetype/DejaVuSans.ttf";
-#endif
-}
-
-void NeoTextSynthesizer::tryAddSystemFallbackFont(int fontSize, FT_Library ftLib)
-{
-    std::string systemFont = getSystemFontPath();
-    if (!fs::exists(systemFont))
-    {
-        throw std::runtime_error(
-            "No fallback fonts found and system default font not available at: " + systemFont +
-            "\nPlease add font files (.ttf/.otf) to the fallback_font_dir directory, "
-            "or ensure the system default font is installed.");
-    }
-
-    std::cout << "No fallback fonts found in fallback_font_dir. "
-              << "Using system default font: " << systemFont << "\n";
-
-    FT_Face face;
-    if (FT_New_Face(ftLib, systemFont.c_str(), 0, &face))
-    {
-        throw std::runtime_error("Failed to load system default font: " + systemFont);
-    }
-    FT_Set_Pixel_Sizes(face, 0, fontSize);
-
-    SharedFontMeta meta;
-    meta.path = systemFont;
-    meta.index = defaultMeta_.size() + fallbackMeta_.size();
-    meta.ascender = (int)(face->size->metrics.ascender >> 6);
-    meta.descender = (int)(face->size->metrics.descender >> 6);
-
-    FT_UInt idx;
-    FT_ULong cp = FT_Get_First_Char(face, &idx);
-    while (idx != 0)
-    {
-        meta.cmap.insert((uint32_t)cp);
-        cp = FT_Get_Next_Char(face, cp, &idx);
-    }
-    fallbackMeta_.push_back(std::move(meta));
-
-    FT_Done_Face(face);
-}
-
 void NeoTextSynthesizer::initResources()
 {
-    const json &imgCfg = config_["image_processor"];
+    const json &textCfg = config_["text_sampler"];
+    const json &bgCfg = config_["bg_sampler"];
     const json &genCfg = config_["generate"];
-    int fontSize = imgCfg.value("font_size", 55);
+    int fontSize = textCfg.value("font_size", 55);
 
     FT_Library tempFtLib;
     if (FT_Init_FreeType(&tempFtLib))
         throw std::runtime_error("Failed to init FreeType");
 
-    std::string defaultFontDir = genCfg["default_font_dir"].get<std::string>();
-    std::string fallbackFontDir = genCfg["fallback_font_dir"].get<std::string>();
+    std::vector<std::string> fontList;
+    if (textCfg.contains("font_list")) {
+        for (const auto& item : textCfg["font_list"]) {
+            fontList.push_back(item.get<std::string>());
+        }
+    }
 
-    // Create directories if they don't exist
-    if (!fs::exists(defaultFontDir))
-        fs::create_directories(defaultFontDir);
-    if (!fs::exists(fallbackFontDir))
-        fs::create_directories(fallbackFontDir);
+    for (const auto& fontPath : fontList) {
+        if (fs::is_directory(fontPath)) {
+            auto metas = Renderer::buildSharedFontMeta(fontPath, fontSize, tempFtLib, defaultMeta_.size());
+            defaultMeta_.insert(defaultMeta_.end(), std::make_move_iterator(metas.begin()), std::make_move_iterator(metas.end()));
+        } else if (fs::is_regular_file(fontPath)) {
+            // TODO: Handle single font file
+        }
+    }
 
-    defaultMeta_ = Renderer::buildSharedFontMeta(defaultFontDir, fontSize, tempFtLib, 0);
-    fallbackMeta_ = Renderer::buildSharedFontMeta(fallbackFontDir, fontSize, tempFtLib, defaultMeta_.size());
-
-    // System font fallback: if no fallback fonts found, try system default
-    if (fallbackMeta_.empty())
+    if (defaultMeta_.empty())
     {
-        tryAddSystemFallbackFont(fontSize, tempFtLib);
+        throw std::runtime_error("No valid fonts found and default font could not be loaded.");
+    }
+
+    std::string sampleStrategy = textCfg.value("sample_strategy", "font-first");
+    if (sampleStrategy == "sample-first" || sampleStrategy == "auto-fallback") {
+        multiFontBitmap_ = std::make_shared<MultiFontBitmap<256>>();
+        for (size_t i = 0; i < defaultMeta_.size(); ++i) {
+            auto cps = defaultMeta_[i].bitmap->get_all_codepoints();
+            for (uint32_t cp : cps) {
+                multiFontBitmap_->set(cp, i);
+            }
+        }
     }
 
     FT_Done_FreeType(tempFtLib);
 
-    std::cout << "Loaded " << defaultMeta_.size() << " default fonts, "
-              << fallbackMeta_.size() << " fallback fonts.\n";
+    std::cout << "\033[32mLoaded " << defaultMeta_.size() << " fonts.\033[0m\n";
 
     // Background resources
-    std::string bgDir = genCfg["bg_dir"].get<std::string>();
-    if (!fs::exists(bgDir))
-        fs::create_directories(bgDir);
-    bgRes_.bgFiles = Renderer::listBgFiles(bgDir);
+    std::vector<std::string> bgList;
+    if (bgCfg.contains("bg_list")) {
+        for (const auto& item : bgCfg["bg_list"]) {
+            bgList.push_back(item.get<std::string>());
+        }
+    }
+
+    for (const auto& bgPath : bgList) {
+        if (fs::is_directory(bgPath)) {
+            auto files = Renderer::listBgFiles(bgPath);
+            bgRes_.bgFiles.insert(bgRes_.bgFiles.end(), files.begin(), files.end());
+        } else if (fs::is_regular_file(bgPath)) {
+            bgRes_.bgFiles.push_back(bgPath);
+        }
+    }
+
+    if (bgRes_.bgFiles.empty() && bgCfg.value("bg_image_prob", 0.0) > 0.0) {
+        std::cout << "\033[33mWarning: bg_image_prob > 0 but no background images found.\033[0m\n";
+    }
 }
 
 NeoTextSynthesizer::NeoTextSynthesizer(const std::string &configStr)
@@ -117,8 +95,12 @@ NeoTextSynthesizer::NeoTextSynthesizer(const std::string &configStr)
     }
 
     // Validate that required sections exist
-    if (!config_.contains("image_processor"))
-        throw std::runtime_error("Configuration missing required section: 'image_processor'");
+    if (!config_.contains("text_sampler"))
+        throw std::runtime_error("Configuration missing required section: 'text_sampler'");
+    if (!config_.contains("bg_sampler"))
+        throw std::runtime_error("Configuration missing required section: 'bg_sampler'");
+    if (!config_.contains("post_process"))
+        throw std::runtime_error("Configuration missing required section: 'post_process'");
     if (!config_.contains("generate"))
         throw std::runtime_error("Configuration missing required section: 'generate'");
 
@@ -140,11 +122,12 @@ void NeoTextSynthesizer::generate(int total, int workers, bool showProgress)
             numWorkers = 1;
     }
 
-    const json &imgCfg = config_["image_processor"];
+    const json &postCfg = config_["post_process"];
+    const json &bgCfg = config_["bg_sampler"];
     const json &genCfg = config_["generate"];
 
     // Text samplers
-    auto samplers = TextSampler::createShards(config_["text_sampler"], numWorkers);
+    auto samplers = TextSampler::createShards(config_["random_config"], numWorkers);
 
     std::string outDir = genCfg["out_dir"].get<std::string>();
     std::string outPq = genCfg["out_jsonl"].get<std::string>();
@@ -178,13 +161,12 @@ void NeoTextSynthesizer::generate(int total, int workers, bool showProgress)
         if (count > 0)
             renderThreads.emplace_back(workerTask, count,
                                        std::ref(samplers[i]),
-                                       std::cref(imgCfg),
                                        std::cref(defaultMeta_),
-                                       std::cref(fallbackMeta_),
+                                       multiFontBitmap_,
                                        std::ref(glyphCache_),
                                        std::ref(bgRes_),
-                                       std::ref(ioQueue),
                                        std::cref(config_),
+                                       std::ref(ioQueue),
                                        std::ref(globalIndex),
                                        std::cref(hierLevels));
     }
@@ -199,32 +181,39 @@ void NeoTextSynthesizer::generate(int total, int workers, bool showProgress)
 
 static cv::Mat generateSingleImage(const json &config,
                                    const std::vector<SharedFontMeta> &defaultMeta,
-                                   const std::vector<SharedFontMeta> &fallbackMeta,
+                                   std::shared_ptr<MultiFontBitmap<256>> multiFontBitmap,
                                    GlyphCache &glyphCache,
                                    SharedBgResources &bgRes,
                                    const std::string &text)
 {
-    const json &imgCfg = config["image_processor"];
+    const json &postCfg = config["post_process"];
     const json &genCfg = config["generate"];
-
-    Renderer renderer(imgCfg, defaultMeta, fallbackMeta, glyphCache, bgRes);
+    const json &textCfg = config["text_sampler"];
+    const json &bgCfg = config["bg_sampler"];
+    
+    Renderer renderer(postCfg, bgCfg, defaultMeta, multiFontBitmap, glyphCache, bgRes);
 
     int outputHeight = genCfg["output_height"].get<int>();
-    int fontSize = imgCfg.value("font_size", 55);
-    double scaleMin = imgCfg.contains("scale_range") ? imgCfg["scale_range"][0].get<double>() : 1.0;
-    double scaleMax = imgCfg.contains("scale_range") ? imgCfg["scale_range"][1].get<double>() : 1.0;
-    bool recomputeWidth = imgCfg.value("recompute_width", false);
-    int mMin = imgCfg["margin_range"][0].get<int>();
-    int mMax = imgCfg["margin_range"][1].get<int>();
-    double offsetProb = imgCfg.value("offset_prob", 0.0);
-    int hOffMin = imgCfg.contains("h_offset_range") ? imgCfg["h_offset_range"][0].get<int>() : 0;
-    int hOffMax = imgCfg.contains("h_offset_range") ? imgCfg["h_offset_range"][1].get<int>() : 0;
-    int vOffMin = imgCfg.contains("v_offset_range") ? imgCfg["v_offset_range"][0].get<int>() : 0;
-    int vOffMax = imgCfg.contains("v_offset_range") ? imgCfg["v_offset_range"][1].get<int>() : 0;
+    int fontSize = textCfg.value("font_size", 55);
+    
+    const json &pasteCfg = postCfg["text_paste"];
+    double scaleMin = pasteCfg.contains("scale_range") ? pasteCfg["scale_range"][0].get<double>() : 1.0;
+    double scaleMax = pasteCfg.contains("scale_range") ? pasteCfg["scale_range"][1].get<double>() : 1.0;
+    bool recomputeWidth = pasteCfg.value("recompute_width", false);
+    int mMin = pasteCfg["margin_range"][0].get<int>();
+    int mMax = pasteCfg["margin_range"][1].get<int>();
+    double offsetProb = pasteCfg.value("offset_prob", 0.0);
+    int hOffMin = pasteCfg.contains("h_offset_range") ? pasteCfg["h_offset_range"][0].get<int>() : 0;
+    int hOffMax = pasteCfg.contains("h_offset_range") ? pasteCfg["h_offset_range"][1].get<int>() : 0;
+    int vOffMin = pasteCfg.contains("v_offset_range") ? pasteCfg["v_offset_range"][0].get<int>() : 0;
+    int vOffMax = pasteCfg.contains("v_offset_range") ? pasteCfg["v_offset_range"][1].get<int>() : 0;
+
+    std::string sampleStrategy = textCfg.value("sample_strategy", "font-first");
+    std::string mutableText = text;
 
     BgInfo bgInfo = renderer.getRandomBgPredict();
     cv::Vec3b approxColor = renderer.getBgApproxColor(bgInfo);
-    cv::Mat textImg = renderer.renderTightText(text, approxColor);
+    cv::Mat textImg = renderer.renderTightText(mutableText, approxColor, sampleStrategy);
     if (textImg.empty())
         throw std::runtime_error("Failed to render text: " + text);
 
@@ -297,7 +286,7 @@ static cv::Mat generateSingleImage(const json &config,
 
 void NeoTextSynthesizer::generateInstanceFile(const std::string &text, const std::string &savePath)
 {
-    cv::Mat img = generateSingleImage(config_, defaultMeta_, fallbackMeta_,
+    cv::Mat img = generateSingleImage(config_, defaultMeta_, multiFontBitmap_,
                                       glyphCache_, bgRes_, text);
     // Ensure parent directory exists
     fs::path p(savePath);
@@ -308,7 +297,7 @@ void NeoTextSynthesizer::generateInstanceFile(const std::string &text, const std
 
 NeoTextSynthesizer::ImageResult NeoTextSynthesizer::generateInstanceExplicit(const std::string &text)
 {
-    cv::Mat img = generateSingleImage(config_, defaultMeta_, fallbackMeta_,
+    cv::Mat img = generateSingleImage(config_, defaultMeta_, multiFontBitmap_,
                                       glyphCache_, bgRes_, text);
 
     // Convert BGR → RGB

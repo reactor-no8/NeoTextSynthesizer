@@ -17,10 +17,12 @@ using json = nlohmann::json;
 
 // ---- Shared (read-only after construction) font metadata ----
 
+#include "paged_bitmap.hpp"
+
 struct SharedFontMeta
 {
     std::string path;
-    std::set<uint32_t> cmap; // Unicode codepoints covered by this font
+    std::shared_ptr<SingleFontBitmap> bitmap; // Unicode codepoints covered by this font
     size_t index;             // stable index into the SharedFontMeta vector (used as GlyphCache key)
 
     // Font-level metrics obtained once at load time.
@@ -63,12 +65,13 @@ class Renderer
 {
 public:
     // Construct a per-thread renderer.
-    // `defaultMeta` / `fallbackMeta` are the shared font metadata vectors.
+    // `defaultMeta` is the shared font metadata vectors.
     // `glyphCache` is the shared glyph bitmap cache.
     // `bgRes` is the shared background resource pool.
-    Renderer(const json &imgCfg,
+    Renderer(const json &postCfg,
+             const json &bgCfg,
              const std::vector<SharedFontMeta> &defaultMeta,
-             const std::vector<SharedFontMeta> &fallbackMeta,
+             std::shared_ptr<MultiFontBitmap<256>> multiFontBitmap,
              GlyphCache &glyphCache,
              SharedBgResources &bgRes);
     ~Renderer();
@@ -86,7 +89,7 @@ public:
     cv::Vec3b getTextColor(const cv::Vec3b &bgColor);
 
     // ---- Text rendering ----
-    cv::Mat renderTightText(const std::string &text, const cv::Vec3b &bgColor);
+    cv::Mat renderTightText(std::string &text, const cv::Vec3b &bgColor, const std::string& sampleStrategy);
 
     // ---- Static builders ----
 
@@ -99,19 +102,19 @@ public:
     static std::vector<std::string> listBgFiles(const std::string &dir);
 
 private:
-    json imgCfg_;
+    json postCfg_;
+    json bgCfg_;
     int fontSize_;
 
     // References to shared, read-only data.
     const std::vector<SharedFontMeta> &defaultMeta_;
-    const std::vector<SharedFontMeta> &fallbackMeta_;
+    std::shared_ptr<MultiFontBitmap<256>> multiFontBitmap_;
     GlyphCache &glyphCache_;
     SharedBgResources &bgRes_;
 
     // Per-thread FT library + font handles.
     FT_Library ftLib_ = nullptr;
     std::vector<ThreadFont> defaultFonts_;
-    std::vector<ThreadFont> fallbackFonts_;
 
     // Open per-thread FT_Face / hb_font for each SharedFontMeta entry.
     void openThreadFonts(const std::vector<SharedFontMeta> &meta,

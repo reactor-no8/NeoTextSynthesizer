@@ -47,16 +47,10 @@ private:
 
     // Shared resources (initialized once in constructor)
     std::vector<SharedFontMeta> defaultMeta_;
-    std::vector<SharedFontMeta> fallbackMeta_;
+    std::shared_ptr<MultiFontBitmap<256>> multiFontBitmap_; // For sample-first and auto-fallback
     GlyphCache glyphCache_;
     SharedBgResources bgRes_;
 
     // Initialize shared resources from config
     void initResources();
-
-    // Try to find a system default font and add it to fallbackMeta_
-    void tryAddSystemFallbackFont(int fontSize, FT_Library ftLib);
-
-    // Get the system default font path for the current platform
-    static std::string getSystemFontPath();
 };
