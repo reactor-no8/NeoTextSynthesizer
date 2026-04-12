@@ -90,5 +90,5 @@ generate:
   output_height: 48
   out_jsonl: ./generated.jsonl
   out_dir: ./generated
-  batchsize: 10000
+  batchsize: 1000
   hierarchical_structure: [100, 625]
