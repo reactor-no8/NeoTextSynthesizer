@@ -38,15 +38,15 @@ find_package(yaml-cpp REQUIRED)
 find_package(harfbuzz CONFIG REQUIRED)
 
 set(CORE_SOURCES
-    utils.cpp
-    textsampler.cpp
-    renderer.cpp
-    writer.cpp
-    worker.cpp
-    glyph_cache.cpp
-    yaml_utils.cpp
-    paged_bitmap.cpp
-    neo_synthesizer.cpp
+    src/utils.cpp
+    src/textsampler.cpp
+    src/renderer.cpp
+    src/writer.cpp
+    src/worker.cpp
+    src/glyph_cache.cpp
+    src/yaml_utils.cpp
+    src/paged_bitmap.cpp
+    src/neo_synthesizer.cpp
 )
 
 add_library(ocr_core STATIC ${CORE_SOURCES})
@@ -79,7 +79,7 @@ set_target_properties(ocr_core PROPERTIES POSITION_INDEPENDENT_CODE ON)
 find_package(Python REQUIRED COMPONENTS Interpreter Development.Module)
 find_package(nanobind CONFIG REQUIRED)
 
-nanobind_add_module(_core bindings.cpp)
+nanobind_add_module(_core src/bindings.cpp)
 target_link_libraries(_core PRIVATE ocr_core)
 
 install(TARGETS _core DESTINATION ${SKBUILD_PROJECT_NAME})
