@@ -3,7 +3,7 @@ neots - CLI tool for SingleLineTextGenerator.
 
 Commands:
     neots init       Initialize a working directory with config and sample data
-    neots generate   Generate OCR training images
+    neots singleline   Generate OCR recognition model training images
     neots help       Show help information
 
 flat-wiki - CLI tool for generating flattened Wikipedia corpuses.
@@ -241,8 +241,8 @@ def _validate_config(config_path: str) -> dict:
     return config
 
 
-def cmd_generate(args):
-    """Handle 'neots generate' command."""
+def cmd_singleline(args):
+    """Handle 'neots singleline' command."""
     from neots import SingleLineTextGenerator
 
     config_path = args.config
@@ -318,8 +318,8 @@ neots init
 
 ----------------------------------------------------------------------
 
-neots generate [options]
-    Generate synthetic OCR training images.
+neots singleline [options]
+    Generate single-line text images for recognition OCR model training.
 
     Options:
         --config PATH     Config file path (default: config.yaml)
@@ -327,8 +327,8 @@ neots generate [options]
         --workers N       Number of worker threads (default: auto)
 
     Examples:
-        neots generate --total 10000
-        neots generate --config my_config.yaml --total 50000 --workers 8
+        neots singleline --total 10000
+        neots singleline --config my_config.yaml --total 50000 --workers 8
 
 ----------------------------------------------------------------------
 
@@ -360,8 +360,8 @@ def main():
         args = parser.parse_args(sys.argv[2:])
         cmd_init(args)
 
-    elif command == "generate":
-        parser = argparse.ArgumentParser(prog="neots generate", add_help=False)
+    elif command == "singleline":
+        parser = argparse.ArgumentParser(prog="neots singleline", add_help=False)
         parser.add_argument("--config", type=str, default="config.yaml",
                             help="Config file path (default: config.yaml)")
         parser.add_argument("--total", type=int, required=True,
@@ -369,7 +369,7 @@ def main():
         parser.add_argument("--workers", type=int, default=0,
                             help="Number of worker threads (default: auto)")
         args = parser.parse_args(sys.argv[2:])
-        cmd_generate(args)
+        cmd_singleline(args)
 
     elif command == "help" or command == "--help" or command == "-h":
         cmd_help()

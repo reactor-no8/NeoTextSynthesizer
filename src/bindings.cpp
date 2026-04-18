@@ -10,7 +10,7 @@ using namespace nb::literals;
 
 NB_MODULE(_core, m)
 {
-    m.doc() = "NeoTextSynthesizer C++ core module";
+    m.doc() = "SingleLineTextGenerator C++ core module";
 
     nb::class_<SingleLineTextGenerator>(m, "SingleLineTextGenerator")
         .def(nb::init<const std::string &>(), "config_str"_a,

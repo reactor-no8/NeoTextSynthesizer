@@ -150,20 +150,20 @@ Then set `bg_image_prob` in `bg_sampler` to control how often real backgrounds a
 ## Quick Start
 
 ```bash
-# Generate 10,000 images with auto-detected worker count
-neots generate --total 10000
+# Generate 10,000 single-line text images with auto-detected worker count
+neots singleline --total 10000
 
 # Generate with custom config and worker count
-neots generate --config my_config.yaml --total 50000 --workers 8
+neots singleline --config my_config.yaml --total 50000 --workers 8
 ```
 
 ## Python API
 
 ```python
-from neots import NeoTextSynthesizer
+from neots import SingleLineTextGenerator
 
 # Initialize with default config
-synth = NeoTextSynthesizer.from_config_file("config.yaml")
+synth = SingleLineTextGenerator.from_config_file("config.yaml")
 
 # Batch generate
 synth.generate(total=10000, workers=8)

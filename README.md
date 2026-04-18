@@ -30,11 +30,11 @@ pip install neots
 # Initialize a workspace
 neots init
 
-# Generate 10,000 images
-neots generate --total 10000
+# Generate 10,000 single-line text images with auto-detected worker count
+neots singleline --total 10000
 
 # Generate with custom config and workers
-neots generate --config config.yaml --total 50000 --workers 8
+neots singleline --config config.yaml --total 50000 --workers 8
 
 # Show help
 neots help
@@ -53,19 +53,19 @@ flat-wiki -l en -o ./corpuses/en.txt -v dictionary.txt -n 5000
 ### Python API
 
 ```python
-from neots import NeoTextSynthesizer
+from neots import SingleLineTextGenerator
 
 # Initialize from config file
-synth = NeoTextSynthesizer.from_config_file("config.yaml")
+synth = SingleLineTextGenerator.from_config_file("config.yaml")
 
 # Initialize from a dictionary
-config = NeoTextSynthesizer.get_default_config()
+config = SingleLineTextGenerator.get_default_config()
 config["generate"]["output_height"] = 64
-synth = NeoTextSynthesizer.from_config(config)
+synth = SingleLineTextGenerator.from_config(config)
 
 # Initialize from built-in default preset
-synth = NeoTextSynthesizer.from_default()          # full preset
-synth = NeoTextSynthesizer.from_default("minimal")  # minimal preset
+synth = SingleLineTextGenerator.from_default()          # full preset
+synth = SingleLineTextGenerator.from_default("minimal")  # minimal preset
 
 # Batch generate (blocks until complete)
 synth.generate(total=10000, workers=8, show_progress=True)
@@ -81,8 +81,8 @@ arr = synth.generate_instance("测试文本", type="numpy")
 synth.generate_instance("サンプル", type="file", path="output.png")
 
 # Export default config
-NeoTextSynthesizer.output_default_dict("my_config.yaml", type="yaml")
-NeoTextSynthesizer.output_default_dict("my_config.json", type="json")
+SingleLineTextGenerator.output_default_dict("my_config.yaml", type="yaml")
+SingleLineTextGenerator.output_default_dict("my_config.json", type="json")
 ```
 
 ### Corpus Generation (Python API)
