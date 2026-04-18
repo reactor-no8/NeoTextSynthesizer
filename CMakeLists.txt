@@ -37,17 +37,9 @@ find_package(Threads REQUIRED)
 find_package(yaml-cpp REQUIRED)
 find_package(harfbuzz CONFIG REQUIRED)
 
-set(CORE_SOURCES
-    src/utils.cpp
-    src/textsampler.cpp
-    src/renderer.cpp
-    src/writer.cpp
-    src/worker.cpp
-    src/glyph_cache.cpp
-    src/yaml_utils.cpp
-    src/paged_bitmap.cpp
-    src/neo_synthesizer.cpp
-)
+file(GLOB CORE_SOURCES CONFIGURE_DEPENDS "src/*.cpp")
+
+list(REMOVE_ITEM CORE_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/src/bindings.cpp")
 
 add_library(ocr_core STATIC ${CORE_SOURCES})
 
