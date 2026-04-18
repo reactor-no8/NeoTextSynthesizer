@@ -1,5 +1,6 @@
-#include "textsampler.hpp"
-#include "utils.hpp"
+#include "text_synth/textsampler.hpp"
+#include "utils/utf8_helper.hpp"
+#include "utils/utils.hpp"
 #include <fstream>
 #include <iostream>
 #include <cmath>
@@ -10,77 +11,6 @@
 
 namespace fs = std::filesystem;
 
-// ---- UTF-8 helpers ----
-
-// Count Unicode codepoints in a UTF-8 string
-static int utf8Len(const std::string &s)
-{
-    int count = 0;
-    for (unsigned char c : s)
-        if ((c & 0xC0) != 0x80)
-            count++;
-    return count;
-}
-
-// Split UTF-8 string into individual character strings
-static std::vector<std::string> utf8Split(const std::string &s)
-{
-    std::vector<std::string> chars;
-    size_t i = 0;
-    while (i < s.size())
-    {
-        unsigned char c = s[i];
-        int len = 1;
-        if ((c & 0xE0) == 0xC0)
-            len = 2;
-        else if ((c & 0xF0) == 0xE0)
-            len = 3;
-        else if ((c & 0xF8) == 0xF0)
-            len = 4;
-        chars.push_back(s.substr(i, len));
-        i += len;
-    }
-    return chars;
-}
-
-// Truncate UTF-8 string to first n codepoints
-static std::string utf8Truncate(const std::string &s, int n)
-{
-    int count = 0;
-    size_t i = 0;
-    while (i < s.size() && count < n)
-    {
-        unsigned char c = s[i];
-        int len = 1;
-        if ((c & 0xE0) == 0xC0)
-            len = 2;
-        else if ((c & 0xF0) == 0xE0)
-            len = 3;
-        else if ((c & 0xF8) == 0xF0)
-            len = 4;
-        i += len;
-        count++;
-    }
-    return s.substr(0, i);
-}
-
-static size_t utf8CharLenFromLead(unsigned char c)
-{
-    if ((c & 0x80) == 0x00)
-        return 1;
-    if ((c & 0xE0) == 0xC0)
-        return 2;
-    if ((c & 0xF0) == 0xE0)
-        return 3;
-    if ((c & 0xF8) == 0xF0)
-        return 4;
-    return 1;
-}
-
-static bool isValidUtf8Start(unsigned char c)
-{
-    return (c & 0x80) == 0x00 || (c & 0xE0) == 0xC0 || (c & 0xF0) == 0xE0 || (c & 0xF8) == 0xF0;
-}
 
 // ---- CharConverter ----
 
@@ -109,7 +39,7 @@ CharConverter::CharConverter(const std::string &mappingFile)
             continue;
 
         std::string prefix = line.substr(0, openParen);
-        auto prefixChars = utf8Split(prefix);
+        auto prefixChars = UTF8Helper::Split(prefix);
         if (prefixChars.empty())
             continue;
         std::string simplified = prefixChars.back();
@@ -152,7 +82,7 @@ std::string CharConverter::convertString(const std::string &input) const
 {
     if (mapping_.empty())
         return input;
-    auto chars = utf8Split(input);
+    auto chars = UTF8Helper::Split(input);
     std::string result;
     result.reserve(input.size());
     for (const auto &ch : chars)
@@ -288,7 +218,7 @@ const std::vector<std::string> &TextSampler::getDataLines(const json &item)
     }
     else if (item.contains("from_string"))
     {
-        lines = utf8Split(item["from_string"].get<std::string>());
+        lines = UTF8Helper::Split(item["from_string"].get<std::string>());
     }
     dataCache_[key] = std::move(lines);
     return dataCache_[key];
@@ -337,7 +267,7 @@ std::string TextSampler::readSequentialUtf8(SequentialState &st, int targetChars
         return st.shardSize - st.bytesConsumed;
     };
 
-    while (utf8Len(out) < targetChars)
+    while (UTF8Helper::Length(out) < targetChars)
     {
         if (st.pendingBytes.empty())
         {
@@ -385,18 +315,18 @@ std::string TextSampler::readSequentialUtf8(SequentialState &st, int targetChars
 
         // Consume valid UTF-8 codepoints from pendingBytes.
         size_t i = 0;
-        while (i < st.pendingBytes.size() && utf8Len(out) < targetChars)
+        while (i < st.pendingBytes.size() && UTF8Helper::Length(out) < targetChars)
         {
             unsigned char lead = (unsigned char)st.pendingBytes[i];
 
             // Skip continuation bytes
-            if (!isValidUtf8Start(lead))
+            if (!UTF8Helper::IsValidUtf8Start(lead))
             {
                 i += 1;
                 continue;
             }
 
-            size_t len = utf8CharLenFromLead(lead);
+            size_t len = UTF8Helper::CharLenFromLead(lead);
 
             // Character is incomplete – need more data in the next chunk.
             if (i + len > st.pendingBytes.size())
@@ -510,9 +440,9 @@ std::string TextSampler::generateString(int targetLen)
 {
     std::string current;
     double roll = randDouble(0.0, 1.0);
-    while (utf8Len(current) < targetLen)
+    while (UTF8Helper::Length(current) < targetLen)
     {
         current += sampleRecursive(config_, roll);
     }
-    return utf8Truncate(current, targetLen);
+    return UTF8Helper::Truncate(current, targetLen);
 }

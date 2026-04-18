@@ -7,7 +7,7 @@ endif()
 
 project(neots CXX)
 
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 include(FetchContent)
@@ -37,14 +37,27 @@ find_package(Threads REQUIRED)
 find_package(yaml-cpp REQUIRED)
 find_package(harfbuzz CONFIG REQUIRED)
 
-file(GLOB CORE_SOURCES CONFIGURE_DEPENDS "src/*.cpp")
-
-list(REMOVE_ITEM CORE_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/src/bindings.cpp")
+set(CORE_SOURCES
+    src/algorithms/glyph_cache.cpp
+    src/algorithms/paged_bitmap.cpp
+    src/backgrounds/background_resources.cpp
+    src/generation_tasks.cpp
+    src/parallelization/parallel.cpp
+    src/parallelization/tasks/singletext_task.cpp
+    src/text_synth/renderer.cpp
+    src/text_synth/text_synthesizer.cpp
+    src/text_synth/textsampler.cpp
+    src/text_synth/writer.cpp
+    src/utils/utf8_helper.cpp
+    src/utils/utils.cpp
+    src/utils/yaml_utils.cpp
+)
 
 add_library(ocr_core STATIC ${CORE_SOURCES})
 
 target_include_directories(ocr_core PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/src
     ${OpenCV_INCLUDE_DIRS}
     ${FREETYPE_INCLUDE_DIRS}
 )
@@ -59,7 +72,6 @@ target_link_libraries(ocr_core PUBLIC
     Threads::Threads
 )
 
-# Platform-appropriate optimization flags
 if(MSVC)
     target_compile_options(ocr_core PRIVATE /O2)
 else()

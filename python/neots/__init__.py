@@ -1,5 +1,5 @@
 """
-NeoTextSynthesizer - A high-performance OCR training data generator.
+SingleLineTextGenerator - A high-performance OCR training data generator.
 
 This package provides tools for generating synthetic OCR training images
 with configurable text sampling, font rendering, and image processing.
@@ -14,7 +14,7 @@ from typing import Optional, Union
 
 import numpy as np
 
-from neots._core import NeoTextSynthesizer as _NeoTextSynthesizer
+from neots._core import SingleLineTextGenerator as _SingleLineTextGenerator
 from neots.flatten_wikipedia_generator import FlattenWikipediaGenerator
 
 
@@ -23,16 +23,16 @@ def _get_bundled_config_path(name: str) -> str:
     return importlib_resources.files("neots") / "data" / "configs" / f"{name}.yaml"
 
 
-class NeoTextSynthesizer:
+class SingleLineTextGenerator:
     """
     High-performance OCR training data generator.
 
-    Wraps the C++ NeoTextSynthesizer with a Pythonic interface.
+    Wraps the C++ SingleLineTextGenerator with a Pythonic interface.
 
     Use the class methods to create instances:
-        - ``NeoTextSynthesizer.from_config(config_dict)``
-        - ``NeoTextSynthesizer.from_config_file(path)``
-        - ``NeoTextSynthesizer.from_default(preset="preset")``
+        - ``SingleLineTextGenerator.from_config(config_dict)``
+        - ``SingleLineTextGenerator.from_config_file(path)``
+        - ``SingleLineTextGenerator.from_default(preset="preset")``
     """
 
     def __init__(self, config_str: str):
@@ -42,12 +42,12 @@ class NeoTextSynthesizer:
         Users should prefer ``from_config``, ``from_config_file``, or
         ``from_default`` instead of calling this directly.
         """
-        self._impl = _NeoTextSynthesizer(config_str)
+        self._impl = _SingleLineTextGenerator(config_str)
 
     @classmethod
-    def from_config(cls, config: dict) -> "NeoTextSynthesizer":
+    def from_config(cls, config: dict) -> "SingleLineTextGenerator":
         """
-        Create a NeoTextSynthesizer from a Python dictionary.
+        Create a SingleLineTextGenerator from a Python dictionary.
 
         Parameters
         ----------
@@ -56,15 +56,15 @@ class NeoTextSynthesizer:
 
         Returns
         -------
-        NeoTextSynthesizer
+        SingleLineTextGenerator
         """
         config_str = json.dumps(config, ensure_ascii=False)
         return cls(config_str)
 
     @classmethod
-    def from_config_file(cls, path: str) -> "NeoTextSynthesizer":
+    def from_config_file(cls, path: str) -> "SingleLineTextGenerator":
         """
-        Create a NeoTextSynthesizer from a JSON or YAML config file.
+        Create a SingleLineTextGenerator from a JSON or YAML config file.
 
         Parameters
         ----------
@@ -73,7 +73,7 @@ class NeoTextSynthesizer:
 
         Returns
         -------
-        NeoTextSynthesizer
+        SingleLineTextGenerator
 
         Raises
         ------
@@ -97,9 +97,9 @@ class NeoTextSynthesizer:
         return cls.from_config(config)
 
     @classmethod
-    def from_default(cls, preset: str = "preset") -> "NeoTextSynthesizer":
+    def from_default(cls, preset: str = "preset") -> "SingleLineTextGenerator":
         """
-        Create a NeoTextSynthesizer from a bundled default configuration.
+        Create a SingleLineTextGenerator from a bundled default configuration.
 
         Parameters
         ----------
@@ -109,7 +109,7 @@ class NeoTextSynthesizer:
 
         Returns
         -------
-        NeoTextSynthesizer
+        SingleLineTextGenerator
 
         Raises
         ------
@@ -242,6 +242,6 @@ def output_config(config: dict, path: str, fmt: str = "yaml"):
 
 
 __all__ = [
-    "NeoTextSynthesizer",
+    "SingleLineTextGenerator",
     "FlattenWikipediaGenerator",
 ]

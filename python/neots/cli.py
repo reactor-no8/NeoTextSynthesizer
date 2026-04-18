@@ -1,5 +1,5 @@
 """
-neots - CLI tool for NeoTextSynthesizer.
+neots - CLI tool for SingleLineTextGenerator.
 
 Commands:
     neots init       Initialize a working directory with config and sample data
@@ -57,7 +57,7 @@ def _copy_data_directory(src_dir: Path, dst_dir: str):
 
 def cmd_init(args):
     """Handle 'neots init' command."""
-    print("NeoTextSynthesizer Initialization")
+    print("SingleLineTextGenerator Initialization")
     print("=" * 40)
     print()
     print("Choose initialization mode:")
@@ -96,7 +96,7 @@ def cmd_init(args):
 
 def _init_preset():
     """Initialize with preset configuration."""
-    from neots import NeoTextSynthesizer, FlattenWikipediaGenerator
+    from neots import SingleLineTextGenerator, FlattenWikipediaGenerator
 
     print()
     print("Initializing with preset configuration...")
@@ -124,7 +124,7 @@ def _init_preset():
 
     # Generate config.yaml from preset
     print("  Generating config.yaml ...")
-    NeoTextSynthesizer.output_default_dict("config.yaml", type="yaml")
+    SingleLineTextGenerator.output_default_dict("config.yaml", type="yaml")
     print("  Created config.yaml")
     
     # Copy default font to fonts/ directory
@@ -174,7 +174,7 @@ def _init_preset():
 
 def _init_minimal():
     """Initialize with minimal configuration."""
-    from neots import NeoTextSynthesizer
+    from neots import SingleLineTextGenerator
 
     print()
     print("Initializing with minimal configuration...")
@@ -186,7 +186,7 @@ def _init_minimal():
         print(f"  Created directory: {d}/")
 
     # Generate config.yaml from minimal config
-    NeoTextSynthesizer.output_minimal_dict("config.yaml", type="yaml")
+    SingleLineTextGenerator.output_minimal_dict("config.yaml", type="yaml")
     
     print("  Created config.yaml (minimal)")
 
@@ -243,7 +243,7 @@ def _validate_config(config_path: str) -> dict:
 
 def cmd_generate(args):
     """Handle 'neots generate' command."""
-    from neots import NeoTextSynthesizer
+    from neots import SingleLineTextGenerator
 
     config_path = args.config
     config_specified = args.config != "config.yaml"  # User explicitly specified
@@ -284,7 +284,7 @@ def cmd_generate(args):
     print()
 
     try:
-        synth = NeoTextSynthesizer.from_config_file(config_path)
+        synth = SingleLineTextGenerator.from_config_file(config_path)
         synth.generate(total=total, workers=workers, show_progress=True)
     except Exception as e:
         print(f"Error during generation: {e}", file=sys.stderr)
@@ -297,7 +297,7 @@ def cmd_generate(args):
 def cmd_help(args=None):
     """Handle 'neots help' command."""
     print("""
-NeoTextSynthesizer (neots) - OCR Training Data Generator
+SingleLineTextGenerator (neots) - OCR Training Data Generator
 
 Usage:
     neots <command> [options]
@@ -338,9 +338,9 @@ neots help
 ----------------------------------------------------------------------
 
 Python API:
-    from neots import NeoTextSynthesizer
+    from neots import SingleLineTextGenerator
 
-    synth = NeoTextSynthesizer.from_config_file("config.yaml")
+    synth = SingleLineTextGenerator.from_config_file("config.yaml")
     synth.generate(total=10000)
 
     img = synth.generate_instance("Hello", type="PIL")

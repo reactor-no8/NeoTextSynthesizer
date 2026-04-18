@@ -24,4 +24,4 @@ void saveJsonAsYaml(const nlohmann::json &j, const std::string &path);
 // Supports .json, .yaml, .yml
 nlohmann::json loadConfigFile(const std::string &path);
 
-} // namespace yaml_utils
+}

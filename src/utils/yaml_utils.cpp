@@ -197,4 +197,4 @@ nlohmann::json loadConfigFile(const std::string &path)
     }
 }
 
-} // namespace yaml_utils
+}

@@ -1,8 +1,4 @@
 build/
-backgrounds/
-default_fonts/
-fallback_fonts/
-corpuses/
 .venv/
 .vscode/
 
@@ -38,7 +34,6 @@ CMakeFiles/
 vcpkg_installed/
 conan/
 
-generated/
 *.egg-info/
 dist/
 __pycache__/
