@@ -33,6 +33,11 @@ jobs:
             arch: x86_64
             runner: windows-latest
             cibw_archs: AMD64
+          # Windows arm64
+          - os: windows
+            arch: arm64
+            runner: windows-11-arm
+            cibw_archs: AMD64
 
     steps:
       - uses: actions/checkout@v6.0.2
