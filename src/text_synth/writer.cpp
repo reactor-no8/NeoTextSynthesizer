@@ -38,7 +38,7 @@ JsonlWriter::~JsonlWriter()
     }
 }
 
-void JsonlWriter::write(const std::string &jsonLine)
+void JsonlWriter::write(const nlohmann::json &jsonLine)
 {
     std::lock_guard<std::mutex> lock(mutex_);
     buffer_.push_back(jsonLine);
@@ -63,7 +63,7 @@ void JsonlWriter::flushLocked()
 
     for (const auto &line : buffer_)
     {
-        file_ << line << '\n';
+        file_ << line.dump() << '\n';
     }
     file_.flush();
 

@@ -1,6 +1,7 @@
 #include "parallelization/tasks/singletext_task.hpp"
 
 #include <opencv2/opencv.hpp>
+#include <nlohmann/json.hpp>
 
 #include "utils/utils.hpp"
 
@@ -24,11 +25,12 @@ GenerationResult SingleLineGenerationTask::executeTask()
 
     GenerationResult result;
     result.encodedData = std::move(encoded);
-    result.json_string = synthesizer_->makeJsonRecord(
-        "",
-        imageResult.text,
-        imageResult.width,
-        imageResult.height,
-        imageResult.vertical);
+    result.json_data = {
+        {"text", text},
+        {"width", imageResult.width},
+        {"height", imageResult.height},
+        {"vertical", imageResult.vertical}
+    };
+
     return result;
 }

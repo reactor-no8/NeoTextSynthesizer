@@ -25,7 +25,7 @@ void parallelGenerate(int numToGen,
             continue;
         }
 
-        if (result.isError || result.json_string.empty())
+        if (result.isError || result.json_data.empty())
         {
             globalErrorCounter.fetch_add(1, std::memory_order_relaxed);
             continue;

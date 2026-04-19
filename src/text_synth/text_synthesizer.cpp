@@ -279,18 +279,3 @@ SingleLineTextSynthesizer::ImageResult SingleLineTextSynthesizer::generateInstan
     result.data.assign(rgb.data, rgb.data + static_cast<size_t>(rgb.rows) * rgb.cols * 3);
     return result;
 }
-
-std::string SingleLineTextSynthesizer::makeJsonRecord(const std::string &relPath,
-                                                      const std::string &text,
-                                                      int width,
-                                                      int height,
-                                                      bool vertical) const
-{
-    std::ostringstream ss;
-    ss << "{\"path\":\"" << escapeJsonString(relPath)
-       << "\",\"text\":\"" << escapeJsonString(text)
-       << "\",\"width\":" << width
-       << ",\"height\":" << height
-       << ",\"vertical\":" << (vertical ? "true" : "false") << "}";
-    return ss.str();
-}

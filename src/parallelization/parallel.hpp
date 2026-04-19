@@ -10,12 +10,13 @@
 #include <string>
 #include <type_traits>
 #include <vector>
+#include <nlohmann/json.hpp>
 
 struct GenerationResult
 {
     std::vector<unsigned char> encodedData;
     std::string relPath;
-    std::string json_string;
+    nlohmann::json json_data;
     bool isError = false;
 };
 

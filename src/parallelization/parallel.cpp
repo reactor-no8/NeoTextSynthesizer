@@ -25,10 +25,11 @@ void ioWorker(BlockingQueue<GenerationResult> &ioQueue,
         GenerationResult &task = *maybeTask;
 
         // Skip error/empty results — no image file, no JSONL entry.
-        if (task.isError || task.json_string.empty())
+        if (task.isError || task.json_data.empty())
         {
             continue;
         }
+        task.json_data["path"] = task.relPath;
 
         fs::path fullPath = fs::path(outDir) / task.relPath;
         const std::string parentDir = fullPath.parent_path().string();
@@ -46,6 +47,6 @@ void ioWorker(BlockingQueue<GenerationResult> &ioQueue,
                        static_cast<std::streamsize>(task.encodedData.size()));
         }
 
-        writer.write(task.json_string);
+        writer.write(task.json_data);
     }
 }

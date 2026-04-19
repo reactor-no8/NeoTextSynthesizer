@@ -55,12 +55,6 @@ public:
     void generateInstanceFile(const std::string &text, const std::string &savePath) const;
     ImageResult generateInstanceExplicit(const std::string &text) const;
 
-    std::string makeJsonRecord(const std::string &relPath,
-                               const std::string &text,
-                               int width,
-                               int height,
-                               bool vertical) const;
-
     const json &getConfig() const { return config_; }
     const std::vector<SharedFontMeta> &getFontMeta() const { return defaultMeta_; }
     std::shared_ptr<MultiFontBitmap<256>> getMultiFontBitmap() const { return multiFontBitmap_; }
