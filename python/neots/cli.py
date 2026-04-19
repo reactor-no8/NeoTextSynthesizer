@@ -339,16 +339,6 @@ neots singleline [options]
 
 neots help
     Show this help message.
-
-----------------------------------------------------------------------
-
-Python API:
-    from neots import SingleLineTextGenerator
-
-    synth = SingleLineTextGenerator.from_config_file("config.yaml")
-    synth.generate(total=10000)
-
-    img = synth.generate_instance("Hello", type="PIL")
 """)
 
 

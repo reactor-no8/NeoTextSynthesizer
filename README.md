@@ -68,7 +68,9 @@ synth = SingleLineTextGenerator.from_default()          # full preset
 synth = SingleLineTextGenerator.from_default("minimal")  # minimal preset
 
 # Batch generate (blocks until complete)
-synth.generate(total=10000, workers=8, show_progress=True)
+generated, failed = synth.generate(total=10000, workers=8, show_progress=True)
+# print("generaed:", generated)
+# print("failed:", failed)
 
 # Generate single image as PIL Image
 img = synth.generate_instance("Hello World", type="PIL")

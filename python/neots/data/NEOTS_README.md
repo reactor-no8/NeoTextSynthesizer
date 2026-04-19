@@ -166,7 +166,9 @@ from neots import SingleLineTextGenerator
 synth = SingleLineTextGenerator.from_config_file("config.yaml")
 
 # Batch generate
-synth.generate(total=10000, workers=8)
+generated, failed = synth.generate(total=10000, workers=8)
+# print("generated:", generated)
+# print("failed:", failed)
 
 # Generate single image
 img = synth.generate_instance("Hello World", type="PIL")
