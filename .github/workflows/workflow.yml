@@ -33,11 +33,13 @@ jobs:
             arch: x86_64
             runner: windows-latest
             cibw_archs: AMD64
+            vcpkg_triplet: x64-windows-static-md
           # Windows arm64
           - os: windows
             arch: arm64
             runner: windows-11-arm
-            cibw_archs: AMD64
+            cibw_archs: ARM64
+            vcpkg_triplet: arm64-windows-static-md
 
     steps:
       - uses: actions/checkout@v6.0.2
@@ -92,13 +94,15 @@ jobs:
             CMAKE_ARGS="-DCMAKE_TOOLCHAIN_FILE=$VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake -DVCPKG_INSTALLED_DIR=${{ github.workspace }}/vcpkg_installed -DVCPKG_BUILD_TYPE=release"
 
           CIBW_BEFORE_ALL_WINDOWS: >
-            cd /d {project} &&
             if not exist "${{ env.VCPKG_CACHE_PATH }}" mkdir "${{ env.VCPKG_CACHE_PATH }}" &&
-            C:/vcpkg/vcpkg.exe install --triplet x64-windows-static-md
+            C:/vcpkg/vcpkg.exe install --triplet ${{ matrix.vcpkg_triplet }}
 
           CIBW_ENVIRONMENT_WINDOWS: >
             VCPKG_BINARY_SOURCES="clear;files,${{ env.VCPKG_CACHE_PATH }},readwrite"
-            CMAKE_ARGS="-DCMAKE_TOOLCHAIN_FILE=C:/vcpkg/scripts/buildsystems/vcpkg.cmake -DVCPKG_INSTALLED_DIR=${{ env.VCPKG_INSTALLED_DIR }} -DVCPKG_BUILD_TYPE=release -DVCPKG_TARGET_TRIPLET=x64-windows-static-md"
+            CMAKE_ARGS="-DCMAKE_TOOLCHAIN_FILE=C:/vcpkg/scripts/buildsystems/vcpkg.cmake 
+                        -DVCPKG_TARGET_TRIPLET=${{ matrix.vcpkg_triplet }} 
+                        -DVCPKG_INSTALLED_DIR=${{ env.VCPKG_INSTALLED_DIR }} 
+                        -DVCPKG_BUILD_TYPE=release"
 
       - name: Fix cache permissions on Linux
         if: runner.os == 'Linux'
