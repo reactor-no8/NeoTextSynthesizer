@@ -285,13 +285,18 @@ def cmd_singleline(args):
 
     try:
         synth = SingleLineTextGenerator.from_config_file(config_path)
-        synth.generate(total=total, workers=workers, show_progress=True)
+        total_generated, total_errors = synth.generate(total=total, workers=workers, show_progress=True)
     except Exception as e:
         print(f"Error during generation: {e}", file=sys.stderr)
         sys.exit(1)
 
     print()
     print("\033[32mGeneration complete!\033[0m")
+    print(f"\033[34mTotal generated: {total_generated}\033[0m")
+    if total_errors > 0:
+        print(f"\033[33mFailed samples:  {total_errors}\033[0m")
+    else:
+        print(f"\033[34mFailed samples:  {total_errors}\033[0m")
 
 
 def cmd_help(args=None):

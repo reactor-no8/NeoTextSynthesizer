@@ -39,3 +39,5 @@ dist/
 __pycache__/
 *.pyc
 _skbuild/
+
+test

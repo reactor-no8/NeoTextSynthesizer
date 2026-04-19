@@ -16,6 +16,7 @@ struct GenerationResult
     std::vector<unsigned char> encodedData;
     std::string relPath;
     std::string json_string;
+    bool isError = false;
 };
 
 template <typename T>
@@ -81,6 +82,7 @@ void parallelGenerate(int numToGen,
                       Executor &executor,
                       BlockingQueue<GenerationResult> &ioQueue,
                       std::atomic<int64_t> &globalIndex,
+                      std::atomic<int64_t> &globalErrorCounter,
                       const std::vector<int64_t> &hierLevels);
 
 class JsonlWriter;

@@ -23,6 +23,13 @@ void ioWorker(BlockingQueue<GenerationResult> &ioQueue,
         }
 
         GenerationResult &task = *maybeTask;
+
+        // Skip error/empty results — no image file, no JSONL entry.
+        if (task.isError || task.json_string.empty())
+        {
+            continue;
+        }
+
         fs::path fullPath = fs::path(outDir) / task.relPath;
         const std::string parentDir = fullPath.parent_path().string();
 

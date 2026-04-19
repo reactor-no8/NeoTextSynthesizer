@@ -142,7 +142,7 @@ class SingleLineTextGenerator:
         show_progress : bool, optional
             Whether to display a progress bar (default: True).
         """
-        self._impl.generate(total, workers, show_progress)
+        return self._impl.generate(total, workers, show_progress)
 
     def generate_instance(
         self,

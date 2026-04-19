@@ -18,7 +18,7 @@ SingleLineTextGenerator::SingleLineTextGenerator(const std::string &configStr)
 {
 }
 
-void SingleLineTextGenerator::generate(int total, int workers, bool showProgress)
+std::pair<int64_t, int64_t> SingleLineTextGenerator::generate(int total, int workers, bool showProgress)
 {
     if (total <= 0)
     {
@@ -61,6 +61,7 @@ void SingleLineTextGenerator::generate(int total, int workers, bool showProgress
     std::thread ioThread(ioWorker, std::ref(ioQueue), std::ref(writer), std::cref(outDir));
 
     std::atomic<int64_t> globalIndex{0};
+    std::atomic<int64_t> globalErrorCounter{0};
     std::vector<std::thread> renderThreads;
 
     const int perWorker = total / numWorkers;
@@ -80,9 +81,9 @@ void SingleLineTextGenerator::generate(int total, int workers, bool showProgress
         };
 
         renderThreads.emplace_back(
-            [count, resources, &ioQueue, &globalIndex, &hierLevels]() mutable {
+            [count, resources, &ioQueue, &globalIndex, &globalErrorCounter, &hierLevels]() mutable {
                 SingleLineGenerationTask task(resources);
-                parallelGenerate(count, task, ioQueue, globalIndex, hierLevels);
+                parallelGenerate(count, task, ioQueue, globalIndex, globalErrorCounter, hierLevels);
             });
     }
 
@@ -94,6 +95,10 @@ void SingleLineTextGenerator::generate(int total, int workers, bool showProgress
     ioQueue.close();
     ioThread.join();
     writer.flush();
+
+    const int64_t totalErrors = globalErrorCounter.load(std::memory_order_relaxed);
+    const int64_t totalGenerated = globalIndex.load(std::memory_order_relaxed);
+    return {totalGenerated, totalErrors};
 }
 
 void SingleLineTextGenerator::generateInstanceFile(const std::string &text, const std::string &savePath) const

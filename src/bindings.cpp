@@ -1,4 +1,5 @@
 #include <nanobind/nanobind.h>
+#include <nanobind/stl/pair.h>
 #include <nanobind/stl/string.h>
 #include <nanobind/stl/vector.h>
 #include <nanobind/ndarray.h>
@@ -17,7 +18,8 @@ NB_MODULE(_core, m)
              "Construct from a YAML or JSON configuration string.")
         .def("generate", &SingleLineTextGenerator::generate,
              "total"_a, "workers"_a = 0, "show_progress"_a = true,
-             "Generate a batch of OCR training images. Blocks until complete.")
+             "Generate a batch of OCR training images. Blocks until complete. "
+             "Returns (total_generated, total_errors).")
         .def("generate_instance_file", &SingleLineTextGenerator::generateInstanceFile,
              "text"_a, "save_path"_a,
              "Generate a single OCR image and save to file.")
