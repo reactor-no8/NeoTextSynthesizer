@@ -131,7 +131,13 @@ void SingleLineTextSynthesizer::initResources()
 
 SingleLineImageResult SingleLineTextSynthesizer::generateSingleImage(const std::string &text) const
 {
-    SingleLineRender renderer(config_, defaultMeta_, multiFontBitmap_, *glyphCache_, *bgResources_);
+    static thread_local std::unique_ptr<SingleLineRender> threadLocalRenderer = nullptr;
+    
+    if (!threadLocalRenderer) {
+        threadLocalRenderer = std::make_unique<SingleLineRender>(
+            config_, defaultMeta_, multiFontBitmap_, *glyphCache_, *bgResources_
+        );
+    }
 
     const json &genCfg = config_["generate"];
     const json &textCfg = config_["text_sampler"];
@@ -152,12 +158,23 @@ SingleLineImageResult SingleLineTextSynthesizer::generateSingleImage(const std::
     const std::string sampleStrategy = textCfg.value("sample_strategy", "font-first");
 
     std::string mutableText = text;
-    BgInfo bgInfo = renderer.getRandomBgPredict();
-    cv::Vec3b approxColor = renderer.getBgApproxColor(bgInfo);
-    cv::Mat textImg = renderer.renderTightText(mutableText, approxColor, sampleStrategy);
+    BgInfo bgInfo = threadLocalRenderer->getRandomBgPredict();
+    cv::Vec3b approxColor = threadLocalRenderer->getBgApproxColor(bgInfo);
+    const double verticalProb = textCfg.value("vertical_prob", 0.0);
+    const bool vertical = randDouble(0, 1) < verticalProb;
+    cv::Mat textImg = threadLocalRenderer->renderTightText(
+        mutableText,
+        approxColor,
+        sampleStrategy,
+        vertical ? TextDirection::Vertical : TextDirection::Horizontal);
     if (textImg.empty())
     {
         throw std::runtime_error("Failed to render text.");
+    }
+
+    if (vertical)
+    {
+        cv::rotate(textImg, textImg, cv::ROTATE_90_COUNTERCLOCKWISE);
     }
 
     int origW = textImg.cols;
@@ -193,7 +210,7 @@ SingleLineImageResult SingleLineTextSynthesizer::generateSingleImage(const std::
         drawY += static_cast<int>(randInt(vOffMin, vOffMax) * fontScale);
     }
 
-    auto [finalBg, _unused] = renderer.getBgCropAndColor(bgInfo, cw, ch);
+    auto [finalBg, _unused] = threadLocalRenderer->getBgCropAndColor(bgInfo, cw, ch);
     cv::Mat finalBgOut = finalBg;
     for (int r = 0; r < textImg.rows; ++r)
     {
