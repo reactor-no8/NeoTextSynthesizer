@@ -14,6 +14,7 @@
 #include "algorithms/glyph_cache.hpp"
 #include "algorithms/paged_bitmap.hpp"
 #include "backgrounds/background_resources.hpp"
+#include "fonts/line_shaper.hpp"
 #include "text_synth/text_synthesizer.hpp"
 
 using json = nlohmann::json;
@@ -49,7 +50,10 @@ public:
     cv::Vec3b getBgApproxColor(const BgInfo &bg);
     std::pair<cv::Mat, cv::Vec3b> getBgCropAndColor(const BgInfo &bg, int tw, int th);
     cv::Vec3b getTextColor(const cv::Vec3b &bgColor);
-    cv::Mat renderTightText(std::string &text, const cv::Vec3b &bgColor, const std::string &sampleStrategy);
+    cv::Mat renderTightText(std::string &text,
+                            const cv::Vec3b &bgColor,
+                            const std::string &sampleStrategy,
+                            TextDirection direction);
 
     static std::vector<SharedFontMeta> buildSharedFontMeta(
         const std::string &dir, int fontSize, FT_Library ftLib, size_t indexOffset = 0);
@@ -67,7 +71,7 @@ private:
 
     void openThreadFonts(const std::vector<SharedFontMeta> &meta,
                          std::vector<ThreadFont> &out);
-    const CachedGlyph *getGlyph(const ThreadFont &tf, uint32_t codepoint);
+    const CachedGlyph *getGlyphByIndex(const ThreadFont &tf, uint32_t glyphIndex);
     static void compositeGlyph(cv::Mat &canvas, const CachedGlyph &glyph,
                                int x, int y, const cv::Vec4b &color);
 };

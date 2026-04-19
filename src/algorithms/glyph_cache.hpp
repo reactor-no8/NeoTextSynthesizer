@@ -21,17 +21,17 @@ class GlyphCache
 {
 public:
     // Look up a cached glyph.  Returns nullptr on miss.
-    const CachedGlyph *find(size_t fontIdx, uint32_t codepoint) const;
+    const CachedGlyph *find(size_t fontIdx, uint32_t glyphIndex) const;
 
     // Insert a glyph into the cache and return a stable pointer to it.
     // If another thread raced and inserted the same key first, the existing
     // entry is returned and `g` is discarded.
-    const CachedGlyph *insert(size_t fontIdx, uint32_t codepoint, CachedGlyph &&g);
+    const CachedGlyph *insert(size_t fontIdx, uint32_t glyphIndex, CachedGlyph &&g);
 
 private:
-    static uint64_t makeKey(size_t fontIdx, uint32_t codepoint)
+    static uint64_t makeKey(size_t fontIdx, uint32_t glyphIndex)
     {
-        return (static_cast<uint64_t>(fontIdx) << 32) | codepoint;
+        return (static_cast<uint64_t>(fontIdx) << 32) | glyphIndex;
     }
 
     mutable std::shared_mutex mutex_;

@@ -41,6 +41,7 @@ set(CORE_SOURCES
     src/algorithms/glyph_cache.cpp
     src/algorithms/paged_bitmap.cpp
     src/backgrounds/background_resources.cpp
+    src/fonts/line_shaper.cpp
     src/generation_tasks.cpp
     src/parallelization/parallel.cpp
     src/parallelization/tasks/singletext_task.cpp
@@ -80,10 +81,14 @@ endif()
 
 set_target_properties(ocr_core PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
-find_package(Python REQUIRED COMPONENTS Interpreter Development.Module)
-find_package(nanobind CONFIG REQUIRED)
+option(NEOTS_BUILD_PYTHON_BINDINGS "Build Python bindings with nanobind" ON)
 
-nanobind_add_module(_core src/bindings.cpp)
-target_link_libraries(_core PRIVATE ocr_core)
+if(NEOTS_BUILD_PYTHON_BINDINGS)
+    find_package(Python REQUIRED COMPONENTS Interpreter Development.Module)
+    find_package(nanobind CONFIG REQUIRED)
 
-install(TARGETS _core DESTINATION ${SKBUILD_PROJECT_NAME})
+    nanobind_add_module(_core src/bindings.cpp)
+    target_link_libraries(_core PRIVATE ocr_core)
+
+    install(TARGETS _core DESTINATION ${SKBUILD_PROJECT_NAME})
+endif()

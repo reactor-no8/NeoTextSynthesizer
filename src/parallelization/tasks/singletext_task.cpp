@@ -28,6 +28,7 @@ GenerationResult SingleLineGenerationTask::executeTask()
         "",
         imageResult.text,
         imageResult.width,
-        imageResult.height);
+        imageResult.height,
+        imageResult.vertical);
     return result;
 }

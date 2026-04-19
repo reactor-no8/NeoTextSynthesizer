@@ -234,6 +234,7 @@ SingleLineImageResult SingleLineTextSynthesizer::generateSingleImage(const std::
     result.text = mutableText;
     result.width = finalImg.cols;
     result.height = finalImg.rows;
+    result.vertical = vertical;
     return result;
 }
 
@@ -257,6 +258,7 @@ SingleLineTextSynthesizer::ImageResult SingleLineTextSynthesizer::generateInstan
     ImageResult result;
     result.height = rgb.rows;
     result.width = rgb.cols;
+    result.vertical = imageResult.vertical;
     result.data.assign(rgb.data, rgb.data + static_cast<size_t>(rgb.rows) * rgb.cols * 3);
     return result;
 }
@@ -264,12 +266,14 @@ SingleLineTextSynthesizer::ImageResult SingleLineTextSynthesizer::generateInstan
 std::string SingleLineTextSynthesizer::makeJsonRecord(const std::string &relPath,
                                                       const std::string &text,
                                                       int width,
-                                                      int height) const
+                                                      int height,
+                                                      bool vertical) const
 {
     std::ostringstream ss;
     ss << "{\"path\":\"" << escapeJsonString(relPath)
        << "\",\"text\":\"" << escapeJsonString(text)
        << "\",\"width\":" << width
-       << ",\"height\":" << height << "}";
+       << ",\"height\":" << height
+       << ",\"vertical\":" << (vertical ? "true" : "false") << "}";
     return ss.str();
 }

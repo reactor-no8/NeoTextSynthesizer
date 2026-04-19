@@ -1,8 +1,10 @@
 #include "text_synth/renderer.hpp"
 
 #include <algorithm>
+#include <cmath>
 #include <filesystem>
 #include <iostream>
+#include <set>
 
 #include "utils/utf8_helper.hpp"
 #include "utils/utils.hpp"
@@ -12,7 +14,36 @@ namespace fs = std::filesystem;
 namespace
 {
 constexpr int kBgApproxSample = 50;
+constexpr int kHbScale = 64;
+
+cv::Rect computeAlphaBoundingBox(const cv::Mat &img)
+{
+    cv::Rect bbox(0, 0, 0, 0);
+    for (int r = 0; r < img.rows; ++r)
+    {
+        for (int c = 0; c < img.cols; ++c)
+        {
+            if (img.at<cv::Vec4b>(r, c)[3] == 0)
+            {
+                continue;
+            }
+
+            if (bbox.width == 0 && bbox.height == 0)
+            {
+                bbox = cv::Rect(c, r, 1, 1);
+            }
+            else
+            {
+                bbox.x = std::min(bbox.x, c);
+                bbox.y = std::min(bbox.y, r);
+                bbox.width = std::max(bbox.x + bbox.width, c + 1) - bbox.x;
+                bbox.height = std::max(bbox.y + bbox.height, r + 1) - bbox.y;
+            }
+        }
+    }
+    return bbox;
 }
+} // namespace
 
 std::vector<SharedFontMeta> SingleLineRender::buildSharedFontMeta(
     const std::string &dir, int fontSize, FT_Library ftLib, size_t indexOffset)
@@ -115,26 +146,33 @@ void SingleLineRender::openThreadFonts(const std::vector<SharedFontMeta> &meta,
             FT_Set_Pixel_Sizes(face, 0, fontSize_);
             tf.ftFace = face;
             tf.hbFont = hb_ft_font_create(face, nullptr);
+            if (tf.hbFont)
+            {
+                hb_ft_font_set_funcs(tf.hbFont);
+                hb_font_set_scale(tf.hbFont,
+                                  static_cast<int>(face->size->metrics.x_scale),
+                                  static_cast<int>(face->size->metrics.y_scale));
+                hb_ft_font_changed(tf.hbFont);
+            }
         }
         out.push_back(std::move(tf));
     }
 }
 
-const CachedGlyph *SingleLineRender::getGlyph(const ThreadFont &tf, uint32_t codepoint)
+const CachedGlyph *SingleLineRender::getGlyphByIndex(const ThreadFont &tf, uint32_t glyphIndex)
 {
     const size_t fontIdx = tf.meta->index;
-    const CachedGlyph *cached = glyphCache_.find(fontIdx, codepoint);
+    const CachedGlyph *cached = glyphCache_.find(fontIdx, glyphIndex);
     if (cached)
     {
         return cached;
     }
-    if (!tf.ftFace)
+    if (!tf.ftFace || glyphIndex == 0)
     {
         return nullptr;
     }
 
-    FT_UInt gi = FT_Get_Char_Index(tf.ftFace, codepoint);
-    if (FT_Load_Glyph(tf.ftFace, gi, FT_LOAD_RENDER))
+    if (FT_Load_Glyph(tf.ftFace, glyphIndex, FT_LOAD_RENDER))
     {
         return nullptr;
     }
@@ -148,7 +186,7 @@ const CachedGlyph *SingleLineRender::getGlyph(const ThreadFont &tf, uint32_t cod
     g.width = static_cast<int>(bmp.width);
     g.pitch = static_cast<int>(bmp.pitch);
     g.buffer.assign(bmp.buffer, bmp.buffer + static_cast<size_t>(bmp.rows) * std::abs(bmp.pitch));
-    return glyphCache_.insert(fontIdx, codepoint, std::move(g));
+    return glyphCache_.insert(fontIdx, glyphIndex, std::move(g));
 }
 
 void SingleLineRender::compositeGlyph(cv::Mat &canvas, const CachedGlyph &glyph,
@@ -334,7 +372,10 @@ cv::Vec3b SingleLineRender::getTextColor(const cv::Vec3b &bgColor)
     return cv::Vec3b(static_cast<uint8_t>(nb * 255), static_cast<uint8_t>(ng * 255), static_cast<uint8_t>(nr * 255));
 }
 
-cv::Mat SingleLineRender::renderTightText(std::string &text, const cv::Vec3b &bgColor, const std::string &sampleStrategy)
+cv::Mat SingleLineRender::renderTightText(std::string &text,
+                                          const cv::Vec3b &bgColor,
+                                          const std::string &sampleStrategy,
+                                          TextDirection direction)
 {
     if (defaultFonts_.empty())
     {
@@ -343,98 +384,428 @@ cv::Mat SingleLineRender::renderTightText(std::string &text, const cv::Vec3b &bg
 
     auto chars = UTF8Helper::Split(text);
     auto codepoints = UTF8Helper::ToCodepoints(text);
-    ThreadFont *selectedFont = nullptr;
+    if (chars.empty() || codepoints.empty())
+    {
+        return {};
+    }
+
     std::vector<ThreadFont *> charFonts(codepoints.size(), nullptr);
+    ThreadFont *primaryFont = nullptr; // used for ascender/descender metrics
 
     if (sampleStrategy == "font-first")
     {
-        int selectedIdx = randInt(0, static_cast<int>(defaultFonts_.size()) - 1);
-        selectedFont = &defaultFonts_[selectedIdx];
+        // Pick a random font; keep only the characters it supports.
+        const int selectedIdx = randInt(0, static_cast<int>(defaultFonts_.size()) - 1);
+        primaryFont = &defaultFonts_[selectedIdx];
 
+        for (size_t i = 0; i < codepoints.size(); ++i)
+        {
+            if (primaryFont->meta->bitmap->test(codepoints[i]))
+            {
+                charFonts[i] = primaryFont;
+            }
+        }
+    }
+    else if (sampleStrategy == "sample-first")
+    {
+        // Try to find a single font that covers ALL characters.
+        std::bitset<256> mask;
+        mask.set();
+        for (uint32_t cp : codepoints)
+        {
+            if (multiFontBitmap_)
+                mask &= multiFontBitmap_->query(cp);
+            if (mask.none())
+                break;
+        }
+
+        if (mask.any())
+        {
+            // At least one font covers everything — pick one randomly.
+            std::vector<int> avail;
+            for (size_t i = 0; i < defaultFonts_.size() && i < 256; ++i)
+            {
+                if (mask.test(i))
+                    avail.push_back(static_cast<int>(i));
+            }
+            if (!avail.empty())
+            {
+                primaryFont = &defaultFonts_[avail[randInt(0, static_cast<int>(avail.size()) - 1)]];
+                for (size_t i = 0; i < codepoints.size(); ++i)
+                    charFonts[i] = primaryFont;
+            }
+        }
+        else
+        {
+            // No single font covers all — pick the highest-coverage font and
+            // drop characters it cannot render.
+            std::vector<int> coverage(defaultFonts_.size(), 0);
+            for (uint32_t cp : codepoints)
+            {
+                if (!multiFontBitmap_)
+                    break;
+                std::bitset<256> bs = multiFontBitmap_->query(cp);
+                for (size_t i = 0; i < defaultFonts_.size() && i < 256; ++i)
+                {
+                    if (bs.test(i))
+                        coverage[i]++;
+                }
+            }
+            int maxCov = -1;
+            std::vector<int> bestFonts;
+            for (size_t i = 0; i < defaultFonts_.size(); ++i)
+            {
+                if (coverage[i] > maxCov)
+                {
+                    maxCov = coverage[i];
+                    bestFonts = {static_cast<int>(i)};
+                }
+                else if (coverage[i] == maxCov && maxCov >= 0)
+                {
+                    bestFonts.push_back(static_cast<int>(i));
+                }
+            }
+            if (!bestFonts.empty() && maxCov > 0)
+            {
+                primaryFont = &defaultFonts_[bestFonts[randInt(0, static_cast<int>(bestFonts.size()) - 1)]];
+                for (size_t i = 0; i < codepoints.size(); ++i)
+                {
+                    if (primaryFont->meta->bitmap->test(codepoints[i]))
+                        charFonts[i] = primaryFont;
+                }
+            }
+        }
+    }
+    else if (sampleStrategy == "auto-fallback")
+    {
+        // Pick a primary font randomly; assign it to all characters it supports.
+        const int selectedIdx = randInt(0, static_cast<int>(defaultFonts_.size()) - 1);
+        primaryFont = &defaultFonts_[selectedIdx];
+
+        std::vector<size_t> unhandledIdx;
+        for (size_t i = 0; i < codepoints.size(); ++i)
+        {
+            if (primaryFont->meta->bitmap->test(codepoints[i]))
+            {
+                charFonts[i] = primaryFont;
+            }
+            else
+            {
+                unhandledIdx.push_back(i);
+            }
+        }
+
+        if (!unhandledIdx.empty() && multiFontBitmap_)
+        {
+            // Try to find one fallback font that covers ALL remaining characters.
+            std::bitset<256> fallbackMask;
+            fallbackMask.set();
+            for (size_t idx : unhandledIdx)
+                fallbackMask &= multiFontBitmap_->query(codepoints[idx]);
+
+            // Exclude the primary font from consideration.
+            if (primaryFont->meta->index < 256)
+                fallbackMask.reset(primaryFont->meta->index);
+
+            ThreadFont *fallbackFont = nullptr;
+
+            if (fallbackMask.any())
+            {
+                std::vector<int> avail;
+                for (size_t i = 0; i < defaultFonts_.size() && i < 256; ++i)
+                {
+                    if (fallbackMask.test(i))
+                        avail.push_back(static_cast<int>(i));
+                }
+                if (!avail.empty())
+                {
+                    fallbackFont = &defaultFonts_[avail[randInt(0, static_cast<int>(avail.size()) - 1)]];
+                    for (size_t idx : unhandledIdx)
+                        charFonts[idx] = fallbackFont;
+                    unhandledIdx.clear();
+                }
+            }
+            else
+            {
+                // No single fallback covers all — pick the best-coverage fallback
+                // and drop what it still can't cover.
+                std::vector<int> coverage(defaultFonts_.size(), 0);
+                for (size_t idx : unhandledIdx)
+                {
+                    std::bitset<256> bs = multiFontBitmap_->query(codepoints[idx]);
+                    for (size_t i = 0; i < defaultFonts_.size() && i < 256; ++i)
+                    {
+                        if (bs.test(i))
+                            coverage[i]++;
+                    }
+                }
+                // Don't re-use the primary font as fallback.
+                if (primaryFont->meta->index < static_cast<int>(coverage.size()))
+                    coverage[primaryFont->meta->index] = -1;
+
+                int maxCov = -1;
+                std::vector<int> bestFonts;
+                for (size_t i = 0; i < defaultFonts_.size(); ++i)
+                {
+                    if (coverage[i] > maxCov)
+                    {
+                        maxCov = coverage[i];
+                        bestFonts = {static_cast<int>(i)};
+                    }
+                    else if (coverage[i] == maxCov && maxCov >= 0)
+                    {
+                        bestFonts.push_back(static_cast<int>(i));
+                    }
+                }
+                if (!bestFonts.empty() && maxCov > 0)
+                {
+                    fallbackFont = &defaultFonts_[bestFonts[randInt(0, static_cast<int>(bestFonts.size()) - 1)]];
+                    std::vector<size_t> stillUnhandled;
+                    for (size_t idx : unhandledIdx)
+                    {
+                        if (fallbackFont->meta->bitmap->test(codepoints[idx]))
+                            charFonts[idx] = fallbackFont;
+                        else
+                            stillUnhandled.push_back(idx);
+                    }
+                    unhandledIdx = stillUnhandled;
+                }
+            }
+            // Any remaining unhandled indices keep charFonts[i] == nullptr → dropped.
+        }
+    }
+    else
+    {
+        // Unknown strategy — fall back to font-first behaviour.
+        const int selectedIdx = randInt(0, static_cast<int>(defaultFonts_.size()) - 1);
+        primaryFont = &defaultFonts_[selectedIdx];
+        for (size_t i = 0; i < codepoints.size(); ++i)
+        {
+            if (primaryFont->meta->bitmap->test(codepoints[i]))
+                charFonts[i] = primaryFont;
+        }
+    }
+
+    // Filter: rebuild text/chars/codepoints/charFonts to only renderable chars.
+    {
         std::string newText;
         std::vector<std::string> newChars;
         std::vector<uint32_t> newCodepoints;
+        std::vector<ThreadFont *> newCharFonts;
         for (size_t i = 0; i < codepoints.size(); ++i)
         {
-            if (selectedFont->meta->bitmap->test(codepoints[i]))
+            if (charFonts[i] != nullptr)
             {
                 newText += chars[i];
                 newChars.push_back(chars[i]);
                 newCodepoints.push_back(codepoints[i]);
-                charFonts[newCodepoints.size() - 1] = selectedFont;
+                newCharFonts.push_back(charFonts[i]);
             }
         }
         text = newText;
         chars = newChars;
         codepoints = newCodepoints;
-        charFonts.resize(codepoints.size());
+        charFonts = newCharFonts;
     }
 
     if (chars.empty())
-    {
         return {};
+
+    // Determine a valid primaryFont
+    if (!primaryFont)
+        primaryFont = charFonts[0];
+    if (!primaryFont)
+        return {};
+
+    // Text effects
+    const json &effectsCfg = config_.contains("text_effects") ? config_["text_effects"] : json::object();
+    const bool applyEffect = randDouble(0, 1) < effectsCfg.value("effect_prob", 0.2);
+    std::string activeEffect;
+    std::set<int> effectRange;
+    if (applyEffect)
+    {
+        static const char *effects[] = {"italic", "underline", "strikethrough"};
+        activeEffect = effects[randInt(0, 2)];
+        if (randDouble(0, 1) < effectsCfg.value("partial_effect_prob", 0.8))
+        {
+            const int length = randInt(3, 10);
+            const int start = randInt(0, std::max(0, static_cast<int>(chars.size()) - length));
+            for (int i = start; i < start + length; ++i)
+                effectRange.insert(i);
+        }
+        else
+        {
+            for (int i = 0; i < static_cast<int>(chars.size()); ++i)
+                effectRange.insert(i);
+        }
     }
+
+    // dimensions depend on text direction.
+    const int fs = fontSize_;
+    const int glyphCount = static_cast<int>(chars.size());
+
+    int canvasW, canvasH;
+    double penX, penY;
+    if (direction == TextDirection::Vertical)
+    {
+        // Vertical: characters advance downward along Y.
+        canvasW = fs * 6;
+        canvasH = glyphCount * fs * 4 + fs * 4;
+        penX = fs * 3.0; // centred horizontally
+        penY = fs * 2.0; // top margin
+    }
+    else
+    {
+        // Horizontal: characters advance rightward along X.
+        canvasW = glyphCount * fs * 4 + fs * 4;
+        canvasH = fs * 6;
+        penX = fs * 2.0;
+        penY = fs * 3.0; // baseline
+    }
+    cv::Mat tempImg(canvasH, canvasW, CV_8UC4, cv::Scalar(0, 0, 0, 0));
 
     cv::Vec3b textColorBGR = getTextColor(bgColor);
     cv::Vec4b textColor(textColorBGR[0], textColorBGR[1], textColorBGR[2], 255);
 
-    const int fs = fontSize_;
-    const int canvasW = static_cast<int>(chars.size()) * fs * 4 + fs * 4;
-    const int canvasH = fs * 6;
-    cv::Mat tempImg(canvasH, canvasW, CV_8UC4, cv::Scalar(0, 0, 0, 0));
+    const double baselineX = penX;
+    const double baselineY = penY;
 
-    int currX = fs * 2;
-    int yOffset = fs * 3;
-
-    for (int i = 0; i < static_cast<int>(chars.size()); ++i)
+    // Render: split characters into font-runs, shape each run with HarfBuzz.
+    size_t runStart = 0;
+    while (runStart < chars.size())
     {
-        const CachedGlyph *glyph = getGlyph(*charFonts[i], codepoints[i]);
-        if (!glyph)
-        {
-            continue;
-        }
-        compositeGlyph(tempImg, *glyph, currX, yOffset, textColor);
-        currX += glyph->advanceX + randInt(-1, 2);
-    }
+        // Collect a run of consecutive characters with the same font.
+        ThreadFont *runFont = charFonts[runStart];
+        size_t runEnd = runStart + 1;
+        while (runEnd < chars.size() && charFonts[runEnd] == runFont)
+            ++runEnd;
 
-    cv::Rect bbox(0, 0, 0, 0);
-    for (int r = 0; r < tempImg.rows; ++r)
-    {
-        for (int c = 0; c < tempImg.cols; ++c)
+        // Build the UTF-8 sub-string for this run.
+        std::string runText;
+        for (size_t i = runStart; i < runEnd; ++i)
+            runText += chars[i];
+
+        // Determine if any character in this run is in the effect range.
+        bool runInEffect = false;
+        for (size_t i = runStart; i < runEnd; ++i)
         {
-            if (tempImg.at<cv::Vec4b>(r, c)[3] > 0)
+            if (effectRange.count(static_cast<int>(i)))
             {
-                if (bbox.width == 0 && bbox.height == 0)
-                {
-                    bbox = cv::Rect(c, r, 1, 1);
-                }
-                else
-                {
-                    bbox.x = std::min(bbox.x, c);
-                    bbox.y = std::min(bbox.y, r);
-                    bbox.width = std::max(bbox.x + bbox.width, c + 1) - bbox.x;
-                    bbox.height = std::max(bbox.y + bbox.height, r + 1) - bbox.y;
-                }
+                runInEffect = true;
+                break;
             }
         }
+
+        // Shape and composite this run.
+        ShapingOptions shapingOptions;
+        shapingOptions.direction = direction;
+        ShapingResult shaping = SingleLineShaper::shapeText(runFont->ftFace, runFont->hbFont, runText, shapingOptions);
+
+        if (shaping.success && !shaping.glyphs.empty())
+        {
+            size_t charIdx = runStart; // maps shaped glyphs back to original char indices
+            for (const auto &sg : shaping.glyphs)
+            {
+                const CachedGlyph *glyph = getGlyphByIndex(*runFont, sg.glyphIndex);
+
+                const int drawX = static_cast<int>(std::lround(penX + static_cast<double>(sg.xOffset) / kHbScale));
+                const int drawY = static_cast<int>(std::lround(penY - static_cast<double>(sg.yOffset) / kHbScale));
+                const int charW = glyph ? glyph->advanceX : static_cast<int>(sg.xAdvance / kHbScale);
+
+                // Determine whether this specific glyph is in the effect range.
+                // cluster field gives the byte offset into runText; map back via charIdx.
+                const bool inEffect = effectRange.count(static_cast<int>(charIdx)) > 0;
+
+                if (glyph)
+                {
+                    if (inEffect && activeEffect == "italic")
+                    {
+                        const float shearFactor = 0.3f;
+                        const int tmpW = charW + static_cast<int>(shearFactor * fs * 2) + 8;
+                        const int tmpH = fs * 2;
+                        const int baseY = fs;
+
+                        cv::Mat charCanvas(tmpH, tmpW, CV_8UC4, cv::Scalar(0, 0, 0, 0));
+                        compositeGlyph(charCanvas, *glyph, 2, baseY, textColor);
+
+                        for (int row = 0; row < tmpH; ++row)
+                        {
+                            const int shift = static_cast<int>(shearFactor * (baseY - row));
+                            for (int col = 0; col < tmpW; ++col)
+                            {
+                                const cv::Vec4b src = charCanvas.at<cv::Vec4b>(row, col);
+                                if (src[3] == 0)
+                                    continue;
+                                const int dx = drawX + (col + shift - 2);
+                                const int dy = (static_cast<int>(penY) - baseY) + row;
+                                if (dx < 0 || dx >= tempImg.cols || dy < 0 || dy >= tempImg.rows)
+                                    continue;
+                                auto &dst = tempImg.at<cv::Vec4b>(dy, dx);
+                                const float a = src[3] / 255.0f;
+                                dst[0] = static_cast<uint8_t>(src[0] * a + dst[0] * (1 - a));
+                                dst[1] = static_cast<uint8_t>(src[1] * a + dst[1] * (1 - a));
+                                dst[2] = static_cast<uint8_t>(src[2] * a + dst[2] * (1 - a));
+                                dst[3] = std::max(dst[3], src[3]);
+                            }
+                        }
+                    }
+                    else
+                    {
+                        compositeGlyph(tempImg, *glyph, drawX, drawY, textColor);
+                    }
+                }
+
+                if (inEffect)
+                {
+                    const int lineW = std::max(1, fs / 18);
+                    if (activeEffect == "underline")
+                    {
+                        const int ly = static_cast<int>(penY) - fs + fs - 2;
+                        cv::line(tempImg, cv::Point(drawX, ly), cv::Point(drawX + charW, ly),
+                                 cv::Scalar(textColor[0], textColor[1], textColor[2], 255), lineW);
+                    }
+                    else if (activeEffect == "strikethrough")
+                    {
+                        const int ly = static_cast<int>(penY) - fs + fs / 2 + 2;
+                        cv::line(tempImg, cv::Point(drawX, ly), cv::Point(drawX + charW, ly),
+                                 cv::Scalar(textColor[0], textColor[1], textColor[2], 255), lineW);
+                    }
+                }
+
+                penX += static_cast<double>(sg.xAdvance) / kHbScale;
+                penY -= static_cast<double>(sg.yAdvance) / kHbScale; // for vertical text
+                ++charIdx;
+            }
+        }
+
+        runStart = runEnd;
     }
 
+    // Crop to bounding box of non-transparent pixels.
+    cv::Rect bbox = computeAlphaBoundingBox(tempImg);
     if (bbox.width <= 0 || bbox.height <= 0)
     {
         return {};
     }
 
-    int ascender = charFonts[0]->meta->ascender;
-    int descender = charFonts[0]->meta->descender;
-    int fontTop = yOffset - ascender;
-    int fontBottom = yOffset - descender;
+    // Expand vertical bbox to full font metrics (ascender / descender)
+    const int ascender = primaryFont->meta->ascender;
+    const int descender = primaryFont->meta->descender; // negative value
+    const int fontTop = static_cast<int>(baselineY) - ascender;
+    const int fontBottom = static_cast<int>(baselineY) - descender;
+
     int newTop = std::min(bbox.y, fontTop);
     int newBottom = std::max(bbox.y + bbox.height, fontBottom);
-
     newTop = std::max(0, newTop);
     newBottom = std::min(tempImg.rows, newBottom);
+
     bbox.y = newTop;
     bbox.height = newBottom - newTop;
+
+    if (bbox.width <= 0 || bbox.height <= 0)
+    {
+        return {};
+    }
 
     return tempImg(bbox).clone();
 }
