@@ -113,6 +113,7 @@ Controls the basic text sampling parameters and font selection strategy.
 | `min_targets` | 5 | Minimum characters per image |
 | `max_targets` | 50 | Maximum characters per image |
 | `font_size` | 55 | Base font size in pixels |
+| `vertical_prob` | 0.2 | Probability of vertical text |
 | `sample_strategy` | `"font-first"` | Strategy for handling missing characters: `"font-first"`, `"sample-first"`, or `"auto-fallback"` |
 | `font_list` | `["./fonts"]` | List of font files or directories containing fonts |
 
