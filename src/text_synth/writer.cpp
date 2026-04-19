@@ -74,9 +74,5 @@ void JsonlWriter::flushLocked()
     {
         const float progress = static_cast<float>(written_) / static_cast<float>(total_) * 100.0f;
         bar_.set_progress(progress);
-        if (written_ >= total_)
-        {
-            bar_.mark_as_completed();
-        }
     }
 }
