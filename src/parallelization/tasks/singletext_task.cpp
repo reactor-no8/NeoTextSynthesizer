@@ -7,7 +7,10 @@
 
 SingleLineGenerationTask::SingleLineGenerationTask(const ExecutorResources &resources)
     : synthesizer_(resources.synthesizer),
-      sampler_(resources.sampler)
+      sampler_(resources.sampler),
+      renderer_(resources.renderer),
+      fontSelector_(resources.fontSelector),
+      bgResources_(resources.bgResources)
 {
 }
 
@@ -18,7 +21,7 @@ GenerationResult SingleLineGenerationTask::executeTask()
         synthesizer_->getConfig()["text_sampler"].value("max_targets", 50));
 
     const std::string text = sampler_->generateString(target);
-    SingleLineImageResult imageResult = synthesizer_->generateSingleImage(text);
+    SingleLineImageResult imageResult = synthesizer_->generateSingleImage(text, *renderer_, fontSelector_, bgResources_);
 
     std::vector<uchar> encoded;
     cv::imencode(".png", imageResult.image, encoded, {cv::IMWRITE_PNG_COMPRESSION, 3});

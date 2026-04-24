@@ -7,6 +7,7 @@
 #include <iomanip>
 #include <algorithm>
 #include <filesystem>
+#include <regex>
 
 namespace fs = std::filesystem;
 
@@ -81,6 +82,49 @@ std::tuple<double, double, double> rgbToHsv(double r, double g, double b)
         h /= 6.0;
     }
     return {h, s, v};
+}
+
+bool isValidHexColor(const std::string &hexColor)
+{
+    // Check if the string is a valid hex color format (#RRGGBB)
+    std::regex hexColorRegex("^#[0-9A-Fa-f]{6}$");
+    return std::regex_match(hexColor, hexColorRegex);
+}
+
+cv::Vec3b parseHexColor(const std::string &hexColor)
+{
+    if (!isValidHexColor(hexColor)) {
+        std::cerr << "Invalid hex color format: " << hexColor << ". Expected format: #RRGGBB" << std::endl;
+        return cv::Vec3b(0, 0, 0); // Default to black on error
+    }
+
+    // Parse the hex color (format: #RRGGBB) to BGR format for OpenCV
+    int r, g, b;
+    std::sscanf(hexColor.c_str() + 1, "%2x%2x%2x", &r, &g, &b);
+    
+    // OpenCV uses BGR order
+    return cv::Vec3b(b, g, r);
+}
+
+cv::Vec3b randomColorInRange(const std::string &hexColor1, const std::string &hexColor2)
+{
+    if (!isValidHexColor(hexColor1) || !isValidHexColor(hexColor2)) {
+        std::cerr << "Invalid hex color format. Expected format: #RRGGBB" << std::endl;
+        return cv::Vec3b(0, 0, 0); // Default to black on error
+    }
+
+    cv::Vec3b color1 = parseHexColor(hexColor1);
+    cv::Vec3b color2 = parseHexColor(hexColor2);
+    
+    // Generate a random color between color1 and color2
+    cv::Vec3b result;
+    for (int i = 0; i < 3; i++) {
+        int minVal = std::min(color1[i], color2[i]);
+        int maxVal = std::max(color1[i], color2[i]);
+        result[i] = static_cast<uchar>(randInt(minVal, maxVal));
+    }
+    
+    return result;
 }
 
 std::string indexToHierarchicalPath(int64_t index, const std::vector<int64_t> &levels)

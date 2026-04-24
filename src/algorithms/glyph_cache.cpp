@@ -8,7 +8,7 @@ const CachedGlyph *GlyphCache::find(size_t fontIdx, uint32_t glyphIndex) const
     auto it = cache_.find(key);
     if (it == cache_.end())
         return nullptr;
-    return &it->second;
+    return it->second.get();
 }
 
 const CachedGlyph *GlyphCache::insert(size_t fontIdx, uint32_t glyphIndex, CachedGlyph &&g)
@@ -16,6 +16,6 @@ const CachedGlyph *GlyphCache::insert(size_t fontIdx, uint32_t glyphIndex, Cache
     uint64_t key = makeKey(fontIdx, glyphIndex);
     std::unique_lock<std::shared_mutex> lock(mutex_);
     // Another thread may have inserted while we were rasterising; check again.
-    auto [it, inserted] = cache_.try_emplace(key, std::move(g));
-    return &it->second;
+    auto [it, inserted] = cache_.try_emplace(key, std::make_unique<CachedGlyph>(std::move(g)));
+    return it->second.get();
 }

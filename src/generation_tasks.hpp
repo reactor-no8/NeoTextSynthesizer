@@ -4,8 +4,14 @@
 #include <memory>
 #include <string>
 #include <utility>
+#include <nlohmann/json.hpp>
 
 #include "text_synth/text_synthesizer.hpp"
+#include "algorithms/glyph_cache.hpp"
+#include "backgrounds/background_resources.hpp"
+#include "fonts/font_selector.hpp"
+
+using json = nlohmann::json;
 
 class SingleLineTextGenerator
 {
@@ -19,5 +25,12 @@ public:
     std::string getConfigJson() const;
 
 private:
+    json config_;
     SingleLineTextSynthesizer synthesizer_;
+    std::unique_ptr<GlyphCache> glyphCache_;
+    std::unique_ptr<BackgroundResources> bgResources_;
+    std::unique_ptr<FontLibrary> globalLibrary_;
+    std::vector<SharedFontMeta> fontMetas_;
+    std::unique_ptr<SingleLineRenderer> renderer_;
+    std::unique_ptr<FontSelector> fontSelector_;
 };

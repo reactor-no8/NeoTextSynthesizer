@@ -10,12 +10,55 @@
 #include "parallelization/tasks/singletext_task.hpp"
 #include "text_synth/textsampler.hpp"
 #include "text_synth/writer.hpp"
+#include "utils/yaml_utils.hpp"
 
 namespace fs = std::filesystem;
 
 SingleLineTextGenerator::SingleLineTextGenerator(const std::string &configStr)
-    : synthesizer_(configStr)
+    : synthesizer_(yaml_utils::yamlStringToJson(configStr))
 {
+    config_ = yaml_utils::yamlStringToJson(configStr);
+    
+    const json &textCfg = config_["text_sampler"];
+    const json &bgCfg = config_["bg_sampler"];
+    const int fontSize = textCfg.value("font_size", 55);
+    
+    // Build font metadata from paths
+    std::vector<std::string> fontList;
+    if (textCfg.contains("font_list"))
+    {
+        for (const auto &item : textCfg["font_list"])
+        {
+            fontList.push_back(item.get<std::string>());
+        }
+    }
+    
+    fontMetas_ = FontSelector::buildSharedFontMeta(fontList, fontSize);
+    if (fontMetas_.empty())
+    {
+        throw std::runtime_error("No valid fonts found.");
+    }
+
+    globalLibrary_ = std::make_unique<FontLibrary>();
+    fontSelector_ = std::make_unique<FontSelector>(fontMetas_, *globalLibrary_);
+    glyphCache_ = std::make_unique<GlyphCache>();
+    bgResources_ = std::make_unique<BackgroundResources>();
+    
+    renderer_ = std::make_unique<SingleLineRenderer>(config_, *glyphCache_, *fontSelector_);
+    
+    std::vector<std::string> bgList;
+    if (bgCfg.contains("bg_list"))
+    {
+        for (const auto &item : bgCfg["bg_list"])
+        {
+            bgList.push_back(item.get<std::string>());
+        }
+    }
+    
+    for (const auto &bgPath : bgList)
+    {
+        bgResources_->addToList(bgPath);
+    }
 }
 
 std::pair<int64_t, int64_t> SingleLineTextGenerator::generate(int total, int workers, bool showProgress)
@@ -39,6 +82,9 @@ std::pair<int64_t, int64_t> SingleLineTextGenerator::generate(int total, int wor
     const auto &genCfg = config["generate"];
 
     auto samplers = TextSampler::createShards(config["random_config"], numWorkers);
+
+    std::vector<FontLibrary> libraries(numWorkers);
+    std::vector<FontSelector> fontSelectors = fontSelector_->createThreadSelectors(libraries);
 
     const std::string outDir = genCfg["out_dir"].get<std::string>();
     const std::string outJsonl = genCfg["out_jsonl"].get<std::string>();
@@ -75,15 +121,18 @@ std::pair<int64_t, int64_t> SingleLineTextGenerator::generate(int total, int wor
             continue;
         }
 
-        SingleLineGenerationTask::ExecutorResources resources{
-            .synthesizer = &synthesizer_,
-            .sampler = &samplers[static_cast<size_t>(i)],
-        };
-
         renderThreads.emplace_back(
-            [count, resources, &ioQueue, &globalIndex, &globalErrorCounter, &hierLevels]() mutable {
+            [this, i, count, &samplers, &fontSelectors, &ioQueue, &globalIndex, &globalErrorCounter, &hierLevels]() {
+                SingleLineRenderer threadRenderer(this->config_, *(this->glyphCache_), fontSelectors[static_cast<size_t>(i)]);
+                SingleLineGenerationTask::ExecutorResources resources{
+                    .synthesizer = &(this->synthesizer_),
+                    .sampler = &samplers[static_cast<size_t>(i)],
+                    .renderer = &threadRenderer,
+                    .fontSelector = fontSelectors[static_cast<size_t>(i)],
+                    .bgResources = *(this->bgResources_)
+                };
                 SingleLineGenerationTask task(resources);
-                parallelGenerate(count, task, ioQueue, globalIndex, globalErrorCounter, hierLevels);
+                parallelGenerate<SingleLineGenerationTask>(count, task, ioQueue, globalIndex, globalErrorCounter, hierLevels);
             });
     }
 
@@ -103,12 +152,12 @@ std::pair<int64_t, int64_t> SingleLineTextGenerator::generate(int total, int wor
 
 void SingleLineTextGenerator::generateInstanceFile(const std::string &text, const std::string &savePath) const
 {
-    synthesizer_.generateInstanceFile(text, savePath);
+    synthesizer_.generateInstanceFile(text, savePath, *renderer_, *fontSelector_, *bgResources_);
 }
 
 SingleLineTextSynthesizer::ImageResult SingleLineTextGenerator::generateInstanceExplicit(const std::string &text) const
 {
-    return synthesizer_.generateInstanceExplicit(text);
+    return synthesizer_.generateInstanceExplicit(text, *renderer_, *fontSelector_, *bgResources_);
 }
 
 std::string SingleLineTextGenerator::getConfigJson() const

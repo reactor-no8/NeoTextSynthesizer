@@ -4,143 +4,33 @@
 #include <fstream>
 #include <sstream>
 
-#include "backgrounds/background_resources.hpp"
+#include "algorithms/colors.hpp"
+#include "algorithms/alpha_blend.hpp"
 #include "text_synth/renderer.hpp"
+#include "algorithms/glyph_cache.hpp"
+#include "backgrounds/background_resources.hpp"
+#include "backgrounds/background_sampler.hpp"
 #include "utils/utils.hpp"
 #include "utils/yaml_utils.hpp"
 
 namespace fs = std::filesystem;
 
-namespace
+SingleLineTextSynthesizer::SingleLineTextSynthesizer(const json &config)
+    : config_(config)
 {
-std::string escapeJsonString(const std::string &s)
-{
-    std::string out;
-    out.reserve(s.size() + 8);
-    for (unsigned char c : s)
-    {
-        switch (c)
-        {
-        case '"':
-            out += "\\\"";
-            break;
-        case '\\':
-            out += "\\\\";
-            break;
-        case '\n':
-            out += "\\n";
-            break;
-        case '\r':
-            out += "\\r";
-            break;
-        case '\t':
-            out += "\\t";
-            break;
-        default:
-            out += static_cast<char>(c);
-            break;
-        }
-    }
-    return out;
-}
-}
-
-SingleLineTextSynthesizer::SingleLineTextSynthesizer(const std::string &configStr)
-    : glyphCache_(std::make_unique<GlyphCache>()),
-      bgResources_(std::make_unique<BackgroundResources>())
-{
-    config_ = yaml_utils::yamlStringToJson(configStr);
-    initResources();
 }
 
 SingleLineTextSynthesizer::~SingleLineTextSynthesizer() = default;
 
-void SingleLineTextSynthesizer::initResources()
+SingleLineImageResult SingleLineTextSynthesizer::generateSingleImage(
+    const std::string &text,
+    SingleLineRenderer &renderer,
+    FontSelector &fontSelector,
+    BackgroundResources &bgResources) const
 {
-    const json &textCfg = config_["text_sampler"];
-    const json &bgCfg = config_["bg_sampler"];
-    const int fontSize = textCfg.value("font_size", 55);
-
-    FT_Library tempFtLib;
-    if (FT_Init_FreeType(&tempFtLib))
-    {
-        throw std::runtime_error("Failed to init FreeType");
-    }
-
-    std::vector<std::string> fontList;
-    if (textCfg.contains("font_list"))
-    {
-        for (const auto &item : textCfg["font_list"])
-        {
-            fontList.push_back(item.get<std::string>());
-        }
-    }
-
-    for (const auto &fontPath : fontList)
-    {
-        if (fs::is_directory(fontPath))
-        {
-            auto metas = SingleLineRender::buildSharedFontMeta(fontPath, fontSize, tempFtLib, defaultMeta_.size());
-            defaultMeta_.insert(defaultMeta_.end(), std::make_move_iterator(metas.begin()), std::make_move_iterator(metas.end()));
-        }
-    }
-
-    if (defaultMeta_.empty())
-    {
-        throw std::runtime_error("No valid fonts found.");
-    }
-
-    std::string sampleStrategy = textCfg.value("sample_strategy", "font-first");
-    if (sampleStrategy == "sample-first" || sampleStrategy == "auto-fallback")
-    {
-        multiFontBitmap_ = std::make_shared<MultiFontBitmap<256>>();
-        for (size_t i = 0; i < defaultMeta_.size(); ++i)
-        {
-            auto cps = defaultMeta_[i].bitmap->get_all_codepoints();
-            for (uint32_t cp : cps)
-            {
-                multiFontBitmap_->set(cp, i);
-            }
-        }
-    }
-
-    FT_Done_FreeType(tempFtLib);
-
-    std::vector<std::string> bgList;
-    if (bgCfg.contains("bg_list"))
-    {
-        for (const auto &item : bgCfg["bg_list"])
-        {
-            bgList.push_back(item.get<std::string>());
-        }
-    }
-
-    for (const auto &bgPath : bgList)
-    {
-        if (fs::is_directory(bgPath))
-        {
-            auto files = BackgroundResources::listBgFiles(bgPath);
-            bgResources_->bgFiles.insert(bgResources_->bgFiles.end(), files.begin(), files.end());
-        }
-        else if (fs::is_regular_file(bgPath))
-        {
-            bgResources_->bgFiles.push_back(bgPath);
-        }
-    }
-}
-
-SingleLineImageResult SingleLineTextSynthesizer::generateSingleImage(const std::string &text) const
-{
-    static thread_local std::unique_ptr<SingleLineRender> threadLocalRenderer = nullptr;
-    
-    if (!threadLocalRenderer) {
-        threadLocalRenderer = std::make_unique<SingleLineRender>(
-            config_, defaultMeta_, multiFontBitmap_, *glyphCache_, *bgResources_
-        );
-    }
-
     const json &genCfg = config_["generate"];
     const json &textCfg = config_["text_sampler"];
+    const json &bgCfg = config_["bg_sampler"];
     const json &pasteCfg = config_["post_process"]["text_paste"];
 
     const int outputHeight = genCfg["output_height"].get<int>();
@@ -155,28 +45,225 @@ SingleLineImageResult SingleLineTextSynthesizer::generateSingleImage(const std::
     const int hOffMax = pasteCfg.contains("h_offset_range") ? pasteCfg["h_offset_range"][1].get<int>() : 0;
     const int vOffMin = pasteCfg.contains("v_offset_range") ? pasteCfg["v_offset_range"][0].get<int>() : 0;
     const int vOffMax = pasteCfg.contains("v_offset_range") ? pasteCfg["v_offset_range"][1].get<int>() : 0;
-    const std::string sampleStrategy = textCfg.value("sample_strategy", "font-first");
-
-    std::string mutableText = text;
-    BgInfo bgInfo = threadLocalRenderer->getRandomBgPredict();
-    cv::Vec3b approxColor = threadLocalRenderer->getBgApproxColor(bgInfo);
     const double verticalProb = textCfg.value("vertical_prob", 0.0);
+    const double bgImageProb = bgCfg.value("bg_image_prob", 0.3);
+    const double grayBgProb = bgCfg.value("gray_bg_prob", 0.7);
     const bool vertical = randDouble(0, 1) < verticalProb;
-    cv::Mat textImg = threadLocalRenderer->renderTightText(
+
+    // Select a font
+    std::string mutableText = text;
+    size_t fontIndex = fontSelector.selectFont(mutableText, mutableText);
+    
+    // Render text as alpha mask
+    cv::Mat alphaMask = renderer.renderTightText(
         mutableText,
-        approxColor,
-        sampleStrategy,
+        fontIndex,
         vertical ? TextDirection::Vertical : TextDirection::Horizontal);
-    if (textImg.empty())
+    
+    if (alphaMask.empty())
     {
         throw std::runtime_error("Failed to render text.");
     }
 
     if (vertical)
     {
-        cv::rotate(textImg, textImg, cv::ROTATE_90_COUNTERCLOCKWISE);
+        cv::rotate(alphaMask, alphaMask, cv::ROTATE_90_COUNTERCLOCKWISE);
     }
 
+    // Sample background based on configuration
+    cv::Mat backgroundImg;
+    cv::Vec3b textColor;
+    
+    // Get background and determine text color based on configuration
+    if (randDouble(0, 1) < bgImageProb && !bgResources.isEmpty())
+    {
+        // Use a real background image
+        backgroundImg = bgResources.getRandomBackground();
+        
+        // Determine text color based on configuration or contrast
+        if (bgCfg.contains("text_color"))
+        {
+            if (bgCfg["text_color"].is_string())
+            {
+                const std::string colorMode = bgCfg["text_color"];
+                if (colorMode == "auto")
+                {
+                    // Calculate the average color of the background for contrast
+                    cv::Scalar avgColor = cv::mean(backgroundImg);
+                    cv::Vec3b bgColor(avgColor[0], avgColor[1], avgColor[2]);
+                    textColor = colors::getContrastiveColor(bgColor);
+                }
+                else if (isValidHexColor(colorMode))
+                {
+                    textColor = parseHexColor(colorMode);
+                }
+                else
+                {
+                    // Default to black if invalid
+                    textColor = cv::Vec3b(0, 0, 0);
+                }
+            }
+            else if (bgCfg["text_color"].is_array() && bgCfg["text_color"].size() == 2)
+            {
+                // Use a random color from the range
+                std::string color1 = bgCfg["text_color"][0];
+                std::string color2 = bgCfg["text_color"][1];
+                if (isValidHexColor(color1) && isValidHexColor(color2))
+                {
+                    textColor = randomColorInRange(color1, color2);
+                }
+                else
+                {
+                    textColor = cv::Vec3b(0, 0, 0); // Default to black if invalid
+                }
+            }
+            else
+            {
+                // Default to auto contrast
+                cv::Scalar avgColor = cv::mean(backgroundImg);
+                cv::Vec3b bgColor(avgColor[0], avgColor[1], avgColor[2]);
+                textColor = colors::getContrastiveColor(bgColor);
+            }
+        }
+        else
+        {
+            // Default to auto contrast if not specified
+            cv::Scalar avgColor = cv::mean(backgroundImg);
+            cv::Vec3b bgColor(avgColor[0], avgColor[1], avgColor[2]);
+            textColor = colors::getContrastiveColor(bgColor);
+        }
+    }
+    else
+    {
+        // Generate a solid color background
+        cv::Vec3b bgColor;
+        
+        if (bgCfg.contains("bg_color"))
+        {
+            if (bgCfg["bg_color"].is_string())
+            {
+                const std::string colorMode = bgCfg["bg_color"];
+                if (colorMode == "auto")
+                {
+                    // Use gray or random light color
+                    if (randDouble(0, 1) < grayBgProb)
+                    {
+                        int gray = randInt(180, 250);
+                        bgColor = cv::Vec3b(gray, gray, gray);
+                    }
+                    else
+                    {
+                        int r = randInt(180, 250);
+                        int g = randInt(180, 250);
+                        int b = randInt(180, 250);
+                        bgColor = cv::Vec3b(b, g, r); // BGR order for OpenCV
+                    }
+                }
+                else if (isValidHexColor(colorMode))
+                {
+                    bgColor = parseHexColor(colorMode);
+                }
+                else
+                {
+                    // Default to white if invalid
+                    bgColor = cv::Vec3b(255, 255, 255);
+                }
+            }
+            else if (bgCfg["bg_color"].is_array() && bgCfg["bg_color"].size() == 2)
+            {
+                // Use a random color from the range
+                std::string color1 = bgCfg["bg_color"][0];
+                std::string color2 = bgCfg["bg_color"][1];
+                if (isValidHexColor(color1) && isValidHexColor(color2))
+                {
+                    bgColor = randomColorInRange(color1, color2);
+                }
+                else
+                {
+                    bgColor = cv::Vec3b(255, 255, 255); // Default to white if invalid
+                }
+            }
+            else
+            {
+                // Default to white
+                bgColor = cv::Vec3b(255, 255, 255);
+            }
+        }
+        else
+        {
+            // Default background color logic if not specified
+            if (randDouble(0, 1) < grayBgProb)
+            {
+                int gray = randInt(180, 250);
+                bgColor = cv::Vec3b(gray, gray, gray);
+            }
+            else
+            {
+                int r = randInt(180, 250);
+                int g = randInt(180, 250);
+                int b = randInt(180, 250);
+                bgColor = cv::Vec3b(b, g, r); // BGR order for OpenCV
+            }
+        }
+        
+        backgroundImg = cv::Mat(alphaMask.rows, alphaMask.cols, CV_8UC3, bgColor);
+        
+        // Determine text color based on configuration or contrast with background color
+        if (bgCfg.contains("text_color"))
+        {
+            if (bgCfg["text_color"].is_string())
+            {
+                const std::string colorMode = bgCfg["text_color"];
+                if (colorMode == "auto")
+                {
+                    textColor = colors::getContrastiveColor(bgColor);
+                }
+                else if (isValidHexColor(colorMode))
+                {
+                    textColor = parseHexColor(colorMode);
+                }
+                else
+                {
+                    textColor = cv::Vec3b(0, 0, 0); // Default to black if invalid
+                }
+            }
+            else if (bgCfg["text_color"].is_array() && bgCfg["text_color"].size() == 2)
+            {
+                // Use a random color from the range
+                std::string color1 = bgCfg["text_color"][0];
+                std::string color2 = bgCfg["text_color"][1];
+                if (isValidHexColor(color1) && isValidHexColor(color2))
+                {
+                    textColor = randomColorInRange(color1, color2);
+                }
+                else
+                {
+                    textColor = cv::Vec3b(0, 0, 0); // Default to black if invalid
+                }
+            }
+            else
+            {
+                // Default to auto contrast
+                textColor = colors::getContrastiveColor(bgColor);
+            }
+        }
+        else
+        {
+            // Default to auto contrast if not specified
+            textColor = colors::getContrastiveColor(bgColor);
+        }
+    }
+    
+    // Resize background to match the alpha mask if needed
+    if (backgroundImg.rows != alphaMask.rows || backgroundImg.cols != alphaMask.cols)
+    {
+        backgroundImg = BackgroundSampler::getRandomCropBackground(backgroundImg, alphaMask.rows, alphaMask.cols);
+    }
+
+    // Apply color to the alpha mask
+    cv::Mat textImg = alpha_blend::applyColorToAlphaMask(alphaMask, textColor);
+    
+    // Scale the rendered text image if needed
     int origW = textImg.cols;
     int origH = textImg.rows;
     double fontScale = static_cast<double>(origH) / fontSize;
@@ -194,10 +281,14 @@ SingleLineImageResult SingleLineTextSynthesizer::generateSingleImage(const std::
     int baseCw = recomputeWidth ? scaledW : origW;
     int baseCh = origH;
 
+    // Determine margins and drawing position
     int marginX = static_cast<int>(randInt(mMin, mMax) * fontScale);
     int marginY = static_cast<int>(randInt(mMin, mMax) * fontScale);
     int cw = std::max(10, baseCw + marginX + marginY);
     int ch = std::max(10, baseCh);
+    
+    // Resize background to proper size with margins
+    cv::resize(backgroundImg, backgroundImg, cv::Size(cw, ch));
 
     int drawX = marginX + (baseCw - scaledW) / 2;
     int drawY = (baseCh - scaledH) / 2;
@@ -210,41 +301,13 @@ SingleLineImageResult SingleLineTextSynthesizer::generateSingleImage(const std::
         drawY += static_cast<int>(randInt(vOffMin, vOffMax) * fontScale);
     }
 
-    auto [finalBg, _unused] = threadLocalRenderer->getBgCropAndColor(bgInfo, cw, ch);
-    cv::Mat finalBgOut = finalBg;
-    for (int r = 0; r < textImg.rows; ++r)
-    {
-        const cv::Vec4b *srcRow = textImg.ptr<cv::Vec4b>(r);
-        int dy = drawY + r;
-        if (dy < 0 || dy >= finalBgOut.rows)
-        {
-            continue;
-        }
-        cv::Vec3b *dstRow = finalBgOut.ptr<cv::Vec3b>(dy);
-        for (int c = 0; c < textImg.cols; ++c)
-        {
-            int dx = drawX + c;
-            if (dx < 0 || dx >= finalBgOut.cols)
-            {
-                continue;
-            }
-            const cv::Vec4b &src = srcRow[c];
-            uint8_t alpha = src[3];
-            if (alpha == 0)
-            {
-                continue;
-            }
-            cv::Vec3b &dst = dstRow[dx];
-            float a = alpha / 255.0f;
-            dst[0] = static_cast<uint8_t>(src[0] * a + dst[0] * (1 - a));
-            dst[1] = static_cast<uint8_t>(src[1] * a + dst[1] * (1 - a));
-            dst[2] = static_cast<uint8_t>(src[2] * a + dst[2] * (1 - a));
-        }
-    }
-
-    int outW = static_cast<int>(static_cast<double>(finalBgOut.cols) * outputHeight / finalBgOut.rows);
+    // Blend text onto background
+    alpha_blend::blendImageOnto(textImg, backgroundImg, drawX, drawY);
+    
+    // Resize to output height
+    int outW = static_cast<int>(static_cast<double>(backgroundImg.cols) * outputHeight / backgroundImg.rows);
     cv::Mat finalImg;
-    cv::resize(finalBgOut, finalImg, cv::Size(outW, outputHeight), 0, 0, cv::INTER_CUBIC);
+    cv::resize(backgroundImg, finalImg, cv::Size(outW, outputHeight), 0, 0, cv::INTER_CUBIC);
 
     SingleLineImageResult result;
     result.image = finalImg;
@@ -255,9 +318,14 @@ SingleLineImageResult SingleLineTextSynthesizer::generateSingleImage(const std::
     return result;
 }
 
-void SingleLineTextSynthesizer::generateInstanceFile(const std::string &text, const std::string &savePath) const
+void SingleLineTextSynthesizer::generateInstanceFile(
+    const std::string &text, 
+    const std::string &savePath,
+    SingleLineRenderer &renderer,
+    FontSelector &fontSelector,
+    BackgroundResources &bgResources) const
 {
-    SingleLineImageResult result = generateSingleImage(text);
+    SingleLineImageResult result = generateSingleImage(text, renderer, fontSelector, bgResources);
     fs::path p(savePath);
     if (p.has_parent_path())
     {
@@ -266,9 +334,13 @@ void SingleLineTextSynthesizer::generateInstanceFile(const std::string &text, co
     cv::imwrite(savePath, result.image);
 }
 
-SingleLineTextSynthesizer::ImageResult SingleLineTextSynthesizer::generateInstanceExplicit(const std::string &text) const
+SingleLineTextSynthesizer::ImageResult SingleLineTextSynthesizer::generateInstanceExplicit(
+    const std::string &text,
+    SingleLineRenderer &renderer,
+    FontSelector &fontSelector,
+    BackgroundResources &bgResources) const
 {
-    SingleLineImageResult imageResult = generateSingleImage(text);
+    SingleLineImageResult imageResult = generateSingleImage(text, renderer, fontSelector, bgResources);
     cv::Mat rgb;
     cv::cvtColor(imageResult.image, rgb, cv::COLOR_BGR2RGB);
 

@@ -3,6 +3,7 @@
 #include <vector>
 #include <unordered_map>
 #include <shared_mutex>
+#include <memory>
 
 // Pre-rasterised glyph bitmap stored in the shared cache.
 struct CachedGlyph
@@ -35,5 +36,5 @@ private:
     }
 
     mutable std::shared_mutex mutex_;
-    std::unordered_map<uint64_t, CachedGlyph> cache_;
+    std::unordered_map<uint64_t, std::unique_ptr<CachedGlyph>> cache_;
 };
