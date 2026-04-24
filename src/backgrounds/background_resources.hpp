@@ -9,11 +9,15 @@
 class BackgroundResources
 {
 public:
-    std::vector<std::string> bgFiles;
-    std::unordered_map<std::string, cv::Mat> bgImageCache;
-    std::unordered_map<std::string, cv::Vec3b> bgApproxColorCache;
-    size_t bgCacheMax = 64;
-    std::mutex bgCacheMutex;
+    void addToList(const std::string &path);
+    bool isEmpty() const { return bgFiles_.empty(); }
+    cv::Mat getRandomBackground() const;
 
-    static std::vector<std::string> listBgFiles(const std::string &dir);
+    const std::vector<std::string> &getFiles() const { return bgFiles_; }
+
+private:
+    std::vector<std::string> bgFiles_;
+    mutable std::unordered_map<std::string, cv::Mat> bgImageCache_;
+    mutable size_t bgCacheMax_ = 64;
+    mutable std::mutex bgCacheMutex_;
 };
