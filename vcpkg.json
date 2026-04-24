@@ -13,6 +13,9 @@
       "default-features": false,
       "features": ["freetype"]
     },
-    "yaml-cpp"
+    "yaml-cpp",
+    "boost-dynamic-bitset",
+    "nlohmann-json",
+    "indicators"
   ]
 }

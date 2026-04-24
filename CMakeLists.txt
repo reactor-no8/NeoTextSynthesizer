@@ -10,38 +10,31 @@ project(neots CXX)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-include(FetchContent)
-
-FetchContent_Declare(
-    json
-    GIT_REPOSITORY https://github.com/nlohmann/json.git
-    GIT_TAG        v3.12.0
-)
-FetchContent_MakeAvailable(json)
-
-FetchContent_Declare(
-    indicators
-    GIT_REPOSITORY https://github.com/p-ranav/indicators.git
-    GIT_TAG        v2.3
-)
-FetchContent_MakeAvailable(indicators)
-
 find_program(NINJA ninja)
 if(NINJA)
     set(CMAKE_MAKE_PROGRAM ${NINJA})
 endif()
 
 find_package(OpenCV REQUIRED)
+find_package(Boost REQUIRED)
 find_package(Freetype REQUIRED)
 find_package(Threads REQUIRED)
 find_package(yaml-cpp REQUIRED)
+find_package(nlohmann_json REQUIRED)
+find_package(indicators REQUIRED)
 find_package(harfbuzz CONFIG REQUIRED)
 
 set(CORE_SOURCES
     src/algorithms/glyph_cache.cpp
     src/algorithms/paged_bitmap.cpp
+    src/algorithms/colors.cpp
+    src/algorithms/alpha_blend.cpp
     src/backgrounds/background_resources.cpp
+    src/backgrounds/background_sampler.cpp
     src/fonts/line_shaper.cpp
+    src/fonts/font_resource.cpp
+    src/fonts/font_selector.cpp
+    src/fonts/library.cpp
     src/generation_tasks.cpp
     src/parallelization/parallel.cpp
     src/parallelization/tasks/singletext_task.cpp
@@ -71,6 +64,7 @@ target_link_libraries(ocr_core PUBLIC
     yaml-cpp::yaml-cpp
     harfbuzz::harfbuzz
     Threads::Threads
+    Boost::boost
 )
 
 if(MSVC)
