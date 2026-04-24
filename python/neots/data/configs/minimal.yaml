@@ -15,6 +15,8 @@ random_config:
 bg_sampler:
   bg_image_prob: 0.0
   gray_bg_prob: 0.7
+  text_color: "auto"
+  bg_color: "auto"
   bg_list:
     - "./backgrounds"
 

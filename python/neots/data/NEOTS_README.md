@@ -89,6 +89,8 @@ Controls the background selection.
 |-----------|---------|-------------|
 | `bg_image_prob` | 0.3 | Probability of using a real background image |
 | `gray_bg_prob` | 0.7 | Probability of using a gray background (vs colored) |
+| `text_color` | `"auto"` | Text color (can be `"auto"`, `"#RRGGBB"` hex format, or a range like `["#000000", "#FFFFFF"]`) |
+| `bg_color` | `"auto"` | Background color (can be `"auto"`, `"#RRGGBB"` hex format, or a range like `["#000000", "#FFFFFF"]`) |
 | `bg_list` | `["./backgrounds"]` | List of background image files or directories |
 
 ### `post_process` Section
