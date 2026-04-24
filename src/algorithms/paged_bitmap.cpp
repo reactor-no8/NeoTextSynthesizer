@@ -41,3 +41,43 @@ std::vector<uint32_t> SingleFontBitmap::get_all_codepoints() const {
         }
         return res;
 }
+
+
+// MultiFontBitmap
+MultiFontBitmap::Page::Page(size_t num_fonts, size_t page_size)
+    : bits(page_size, boost::dynamic_bitset<>(num_fonts)) {}
+
+MultiFontBitmap::MultiFontBitmap(size_t num_fonts)
+    : num_fonts_(num_fonts) {
+    pages_.resize(NUM_PAGES);
+}
+
+void MultiFontBitmap::set(uint32_t codepoint, size_t font_index) {
+    if (codepoint >= 0x110000 || font_index >= num_fonts_) return;
+
+    size_t page_idx = codepoint / PAGE_SIZE;
+    size_t bit_idx  = codepoint % PAGE_SIZE;
+
+    if (!pages_[page_idx]) {
+        pages_[page_idx] = std::make_unique<Page>(num_fonts_, PAGE_SIZE);
+    }
+
+    pages_[page_idx]->bits[bit_idx].set(font_index);
+}
+
+boost::dynamic_bitset<> MultiFontBitmap::query(uint32_t codepoint) const {
+    if (codepoint >= 0x110000)
+        return boost::dynamic_bitset<>(num_fonts_);
+
+    size_t page_idx = codepoint / PAGE_SIZE;
+    size_t bit_idx  = codepoint % PAGE_SIZE;
+
+    if (!pages_[page_idx])
+        return boost::dynamic_bitset<>(num_fonts_);
+
+    return pages_[page_idx]->bits[bit_idx];
+}
+
+size_t MultiFontBitmap::num_fonts() const {
+    return num_fonts_;
+}
