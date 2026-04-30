@@ -80,6 +80,7 @@ concept GenerationTaskExecutor = requires(Executor executor) {
 
 template <GenerationTaskExecutor Executor>
 void parallelGenerate(int numToGen,
+                      bool retryOnError,
                       Executor &executor,
                       BlockingQueue<GenerationResult> &ioQueue,
                       std::atomic<int64_t> &globalIndex,

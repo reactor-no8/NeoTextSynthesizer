@@ -90,6 +90,7 @@ std::pair<int64_t, int64_t> SingleLineTextGenerator::generate(int total, int wor
     const std::string outDir = genCfg["out_dir"].get<std::string>();
     const std::string outJsonl = genCfg["out_jsonl"].get<std::string>();
     const int batchSize = genCfg.value("batchsize", 10000);
+    const bool retryOnError = genCfg.value("retry_on_error", true);
 
     std::vector<int64_t> hierLevels;
     if (genCfg.contains("hierarchical_structure"))
@@ -123,7 +124,7 @@ std::pair<int64_t, int64_t> SingleLineTextGenerator::generate(int total, int wor
         }
 
         renderThreads.emplace_back(
-            [this, i, count, &samplers, &fontSelectors, &ioQueue, &globalIndex, &globalErrorCounter, &hierLevels]() {
+            [this, i, count, retryOnError, &samplers, &fontSelectors, &ioQueue, &globalIndex, &globalErrorCounter, &hierLevels]() {
                 SingleLineRenderer threadRenderer(this->config_, *(this->glyphCache_), fontSelectors[static_cast<size_t>(i)]);
                 SingleLineGenerationTask::ExecutorResources resources{
                     .synthesizer = &(this->synthesizer_),
@@ -133,7 +134,7 @@ std::pair<int64_t, int64_t> SingleLineTextGenerator::generate(int total, int wor
                     .bgResources = *(this->bgResources_)
                 };
                 SingleLineGenerationTask task(resources);
-                parallelGenerate<SingleLineGenerationTask>(count, task, ioQueue, globalIndex, globalErrorCounter, hierLevels);
+                parallelGenerate<SingleLineGenerationTask>(count, retryOnError, task, ioQueue, globalIndex, globalErrorCounter, hierLevels);
             });
     }
 

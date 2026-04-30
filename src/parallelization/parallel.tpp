@@ -6,33 +6,31 @@
 
 template <GenerationTaskExecutor Executor>
 void parallelGenerate(int numToGen,
+                      bool retryOnError,
                       Executor &executor,
                       BlockingQueue<GenerationResult> &ioQueue,
                       std::atomic<int64_t> &globalIndex,
                       std::atomic<int64_t> &globalErrorCounter,
                       const std::vector<int64_t> &hierLevels)
 {
-    for (int i = 0; i < numToGen; ++i)
-    {
-        GenerationResult result;
-        try
-        {
-            result = executor.executeTask();
-        }
-        catch (...)
-        {
-            globalErrorCounter.fetch_add(1, std::memory_order_relaxed);
-            continue;
-        }
+    auto tryOnce = [&]() -> std::optional<GenerationResult> {
+        try {
+            auto res = executor.executeTask();
+            if (!res.isError && !res.json_data.empty()) return res;
+        } catch (...) { }
+        
+        globalErrorCounter.fetch_add(1, std::memory_order_relaxed);
+        return std::nullopt;
+    };
 
-        if (result.isError || result.json_data.empty())
-        {
-            globalErrorCounter.fetch_add(1, std::memory_order_relaxed);
-            continue;
+    for (int i = 0; i < numToGen; ) {
+        if (auto result = tryOnce()) {
+            const int64_t idx = globalIndex.fetch_add(1, std::memory_order_relaxed);
+            result->relPath = indexToHierarchicalPath(idx, hierLevels);
+            ioQueue.push(std::move(*result));
+            ++i;
+        } else if (!retryOnError) {
+            ++i;
         }
-
-        const int64_t idx = globalIndex.fetch_add(1, std::memory_order_relaxed);
-        result.relPath = indexToHierarchicalPath(idx, hierLevels);
-        ioQueue.push(std::move(result));
     }
 }

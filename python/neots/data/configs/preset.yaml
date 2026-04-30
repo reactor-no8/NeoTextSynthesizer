@@ -91,6 +91,7 @@ post_process:
 
 generate:
   output_height: 48
+  retry_on_error: true
   out_jsonl: ./generated.jsonl
   out_dir: ./generated
   batchsize: 1000
