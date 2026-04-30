@@ -190,6 +190,14 @@ Controls visual appearance:
 | `h_offset_range` | [-7, 7] | Horizontal offset range |
 | `v_offset_range` | [-5, 5] | Vertical offset range |
 
+#### `transforms`
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `rotation_prob` | 0.3 | Probability of applying rotation |
+| `rotation_range` | [-2.5, 2.5] | Rotation angle range in degrees |
+| `distortion_prob` | 0.2 | Probability of applying distortion |
+| `distortion_level` | 0.03 | Distortion intensity (e.g., 0.03 means 3% distortion) |
+
 ### `generate`
 
 Controls output structure:
