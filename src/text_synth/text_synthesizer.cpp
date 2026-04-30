@@ -8,6 +8,7 @@
 #include "algorithms/alpha_blend.hpp"
 #include "text_synth/renderer.hpp"
 #include "algorithms/glyph_cache.hpp"
+#include "algorithms/transforms.hpp"
 #include "backgrounds/background_resources.hpp"
 #include "backgrounds/background_sampler.hpp"
 #include "utils/utils.hpp"
@@ -32,6 +33,7 @@ SingleLineImageResult SingleLineTextSynthesizer::generateSingleImage(
     const json &textCfg = config_["text_sampler"];
     const json &bgCfg = config_["bg_sampler"];
     const json &pasteCfg = config_["post_process"]["text_paste"];
+    const json &transformCfg = config_["post_process"]["transforms"];
 
     const int outputHeight = genCfg["output_height"].get<int>();
     const int fontSize = textCfg.value("font_size", 55);
@@ -44,6 +46,11 @@ SingleLineImageResult SingleLineTextSynthesizer::generateSingleImage(
     const int hOffMax = pasteCfg.contains("h_offset_range") ? pasteCfg["h_offset_range"][1].get<int>() : 0;
     const int vOffMin = pasteCfg.contains("v_offset_range") ? pasteCfg["v_offset_range"][0].get<int>() : 0;
     const int vOffMax = pasteCfg.contains("v_offset_range") ? pasteCfg["v_offset_range"][1].get<int>() : 0;
+    const double rotationProb = transformCfg.value("rotation_prob", 0.0);
+    const int rotationMax = transformCfg.contains("rotation_range") ? transformCfg["rotation_range"][1].get<int>() : 0;
+    const int rotationMin = transformCfg.contains("rotation_range") ? transformCfg["rotation_range"][0].get<int>() : 0;
+    const double distortionProb = transformCfg.value("distortion_prob", 0.0);
+    const double distortionLevel = transformCfg.value("distortion_level", 0.0);
     const double verticalProb = textCfg.value("vertical_prob", 0.0);
     const double bgImageProb = bgCfg.value("bg_image_prob", 0.3);
     const double grayBgProb = bgCfg.value("gray_bg_prob", 0.7);
@@ -271,10 +278,19 @@ SingleLineImageResult SingleLineTextSynthesizer::generateSingleImage(
         cv::resize(alphaMask, alphaMask, cv::Size(nw, nh), 0, 0, cv::INTER_CUBIC);
     }
 
+    if (randDouble(0, 1) < rotationProb)
+    {
+        alphaMask = geometric_transforms::applyAffineTransform(alphaMask, rotationMax, rotationMin);
+    }
+    if (randDouble(0, 1) < distortionProb)
+    {
+        alphaMask = geometric_transforms::applyPerspectiveTransform(alphaMask, distortionLevel);
+    }
+
     int scaledW = alphaMask.cols;
     int scaledH = alphaMask.rows;
     int baseCw = scaledW;
-    int baseCh = origH;
+    int baseCh = scaledH;
 
     // Determine margins and drawing position
     int marginX = static_cast<int>(randInt(mMin, mMax) * fontScale);
@@ -303,7 +319,6 @@ SingleLineImageResult SingleLineTextSynthesizer::generateSingleImage(
         else if (backgroundImg.channels() == 4)
             cv::cvtColor(backgroundImg, backgroundImg, cv::COLOR_BGRA2BGR);
     }
-
     // Blend alpha mask with text color onto background
     alpha_blend::blendAlphaMaskOnto(alphaMask, backgroundImg, drawX, drawY, textColor);
     

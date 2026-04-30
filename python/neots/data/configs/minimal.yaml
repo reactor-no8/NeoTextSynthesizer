@@ -30,6 +30,11 @@ post_process:
     offset_prob: 0.5
     h_offset_range: [-7, 7]
     v_offset_range: [-5, 5]
+  transforms:
+    rotation_prob: 0.3
+    rotation_range: [-2.5, 2.5]
+    distortion_prob: 0.2
+    distortion_level: 0.03
 
 generate:
   output_height: 48

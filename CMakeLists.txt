@@ -29,6 +29,7 @@ set(CORE_SOURCES
     src/algorithms/paged_bitmap.cpp
     src/algorithms/colors.cpp
     src/algorithms/alpha_blend.cpp
+    src/algorithms/transforms.cpp
     src/backgrounds/background_resources.cpp
     src/backgrounds/background_sampler.cpp
     src/fonts/line_shaper.cpp
@@ -67,10 +68,12 @@ target_link_libraries(ocr_core PUBLIC
     Boost::boost
 )
 
-if(MSVC)
-    target_compile_options(ocr_core PRIVATE /O2)
-else()
-    target_compile_options(ocr_core PRIVATE -O2)
+if(CMAKE_BUILD_TYPE STREQUAL "Release")
+    if(MSVC)
+        target_compile_options(ocr_core PRIVATE /O2)
+    else()
+        target_compile_options(ocr_core PRIVATE -O2)
+    endif()
 endif()
 
 set_target_properties(ocr_core PROPERTIES POSITION_INDEPENDENT_CODE ON)
