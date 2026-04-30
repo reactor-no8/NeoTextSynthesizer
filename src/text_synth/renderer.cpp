@@ -6,6 +6,7 @@
 #include <set>
 
 #include "algorithms/alpha_blend.hpp"
+#include "fonts/text_effects.hpp"
 #include "utils/utf8_helper.hpp"
 #include "utils/utils.hpp"
 
@@ -119,6 +120,45 @@ cv::Mat SingleLineRenderer::renderTightText(std::string &text,
         int ascender = fontRes.getFTFace()->size->metrics.ascender >> 6;
         int descender = fontRes.getFTFace()->size->metrics.descender >> 6;
 
+        // Text effects (italic / underline / strikethrough)
+        const json &effectsCfg = config_["post_process"]["text_effects"];
+        const bool applyEffect = randDouble(0, 1) < effectsCfg.value("effect_prob", 0.2);
+        std::string activeEffect;
+        std::set<int> effectClusters; // byte offsets of affected characters
+
+        if (applyEffect)
+        {
+            static const char *effects[] = {"italic", "underline", "strikethrough"};
+            activeEffect = effects[randInt(0, 2)];
+
+            if (randDouble(0, 1) < effectsCfg.value("partial_effect_prob", 0.8))
+            {
+                // Partial: pick a contiguous sub-range of characters
+                const int length = randInt(3, std::max(3, static_cast<int>(codepoints.size())));
+                const int start = randInt(0, std::max(0, static_cast<int>(codepoints.size()) - length));
+                // Map character indices → byte offsets via UTF-8
+                size_t byteOffset = 0;
+                for (int i = 0; i < static_cast<int>(codepoints.size()); ++i)
+                {
+                    if (i >= start && i < start + length)
+                    {
+                        effectClusters.insert(static_cast<int>(byteOffset));
+                    }
+                    byteOffset += chars[i].size();
+                }
+            }
+            else
+            {
+                // Full: all characters
+                size_t byteOffset = 0;
+                for (int i = 0; i < static_cast<int>(codepoints.size()); ++i)
+                {
+                    effectClusters.insert(static_cast<int>(byteOffset));
+                    byteOffset += chars[i].size();
+                }
+            }
+        }
+
         // dimensions depend on text direction
         const int fs = fontSize_;
         const int glyphCount = static_cast<int>(chars.size());
@@ -162,16 +202,41 @@ cv::Mat SingleLineRenderer::renderTightText(std::string &text,
             for (const auto &sg : shaping.glyphs)
             {
                 const CachedGlyph *glyph = getGlyphByIndex(fontRes, sg.glyphIndex);
-                
+
                 const int drawX = static_cast<int>(std::lround(penX + static_cast<double>(sg.xOffset) / kHbScale));
                 const int drawY = static_cast<int>(std::lround(penY - static_cast<double>(sg.yOffset) / kHbScale));
-                
+                const int advanceX = static_cast<int>(sg.xAdvance / kHbScale);
+
+                const bool inEffect = effectClusters.count(sg.cluster) > 0;
+
                 if (glyph)
                 {
-                    // Use the alpha blending function for glyphs
-                    alpha_blend::compositeGlyph(alphaMask, *glyph, drawX, drawY);
+                    if (inEffect && activeEffect == "italic")
+                    {
+                        text_effects::applyItalic(alphaMask, *glyph, drawX, drawY,
+                                                  advanceX, fs);
+                    }
+                    else
+                    {
+                        alpha_blend::compositeGlyph(alphaMask, *glyph, drawX, drawY);
+                    }
                 }
-                
+
+                // Apply post-render effects (underline / strikethrough)
+                if (inEffect && glyph)
+                {
+                    if (activeEffect == "underline")
+                    {
+                        text_effects::applyUnderline(alphaMask, drawX, drawY,
+                                                     advanceX, fs);
+                    }
+                    else if (activeEffect == "strikethrough")
+                    {
+                        text_effects::applyStrikethrough(alphaMask, drawX, drawY,
+                                                         advanceX, fs);
+                    }
+                }
+
                 penX += static_cast<double>(sg.xAdvance) / kHbScale;
                 penY -= static_cast<double>(sg.yAdvance) / kHbScale; // for vertical text
             }

@@ -33,6 +33,7 @@ set(CORE_SOURCES
     src/backgrounds/background_resources.cpp
     src/backgrounds/background_sampler.cpp
     src/fonts/line_shaper.cpp
+    src/fonts/text_effects.cpp
     src/fonts/font_resource.cpp
     src/fonts/font_selector.cpp
     src/fonts/library.cpp
@@ -70,9 +71,9 @@ target_link_libraries(ocr_core PUBLIC
 
 if(CMAKE_BUILD_TYPE STREQUAL "Release")
     if(MSVC)
-        target_compile_options(ocr_core PRIVATE /O2)
+        target_compile_options(ocr_core PRIVATE /O3)
     else()
-        target_compile_options(ocr_core PRIVATE -O2)
+        target_compile_options(ocr_core PRIVATE -O3)
     endif()
 endif()
 
