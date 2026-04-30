@@ -22,6 +22,7 @@ SingleLineTextGenerator::SingleLineTextGenerator(const std::string &configStr)
     const json &textCfg = config_["text_sampler"];
     const json &bgCfg = config_["bg_sampler"];
     const int fontSize = textCfg.value("font_size", 55);
+    const std::string strategy = textCfg.value("sample_strategy", "font-first");
     
     // Build font metadata from paths
     std::vector<std::string> fontList;
@@ -40,7 +41,7 @@ SingleLineTextGenerator::SingleLineTextGenerator(const std::string &configStr)
     }
 
     globalLibrary_ = std::make_unique<FontLibrary>();
-    fontSelector_ = std::make_unique<FontSelector>(fontMetas_, *globalLibrary_);
+    fontSelector_ = std::make_unique<FontSelector>(fontMetas_, *globalLibrary_, strategy);
     glyphCache_ = std::make_unique<GlyphCache>();
     bgResources_ = std::make_unique<BackgroundResources>();
     

@@ -16,7 +16,7 @@ public:
     FontSelector() = default;
     
     // Initialize FontSelector with SharedFontMeta list
-    explicit FontSelector(std::vector<SharedFontMeta> fontMetas, FontLibrary& library);
+    explicit FontSelector(std::vector<SharedFontMeta> fontMetas, FontLibrary& library, const std::string& strategy);
 
     FontSelector(const FontSelector&) = delete;
     FontSelector& operator=(const FontSelector&) = delete;

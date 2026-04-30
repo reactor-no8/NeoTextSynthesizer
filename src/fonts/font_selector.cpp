@@ -120,8 +120,8 @@ std::vector<SharedFontMeta> FontSelector::buildSharedFontMeta(
     return out;
 }
 
-FontSelector::FontSelector(std::vector<SharedFontMeta> fontMetas, FontLibrary& library)
-    : fontMetas_(std::move(fontMetas))
+FontSelector::FontSelector(std::vector<SharedFontMeta> fontMetas, FontLibrary& library, const std::string& strategy)
+    : fontMetas_(std::move(fontMetas)), strategy_(strategy)
 {
     fonts_.reserve(fontMetas_.size());
     
