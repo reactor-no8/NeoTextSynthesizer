@@ -1,6 +1,8 @@
-# NeoTextSynthesizer (neots)
+# NeoTextSynthesizer
 
 **NeoTextSynthesizer** is a high-performance synthetic OCR training data generator built with C++.
+
+![NeoTS vs TRDG Performance](img/neots_trdg_performance.webp)
 
 NeoTextSynthesizer generates realistic text images with diverse fonts, backgrounds, and visual effects — ideal for training Text Recognition models.
 
@@ -13,6 +15,17 @@ NeoTextSynthesizer generates realistic text images with diverse fonts, backgroun
 - **Python Integration**: Full Python API via nanobind with NumPy/PIL support
 - **CLI Tools**: `neots` for workspace initialization and batch generation, `flat-wiki` for Wikipedia corpus generation
 - **Cross-platform**: Supports Linux x86_64, Linux AArch64, macOS ARM64, and Windows x86_64
+
+![01](img/01.png)
+![02](img/02.png)
+![03](img/03.png)
+![04](img/04.png)
+![05](img/05.png)
+![06](img/06.png)
+![07](img/07.png)
+![08](img/08.png)
+
+(Vertical & Horizontal text, various languages, fonts, backgrounds, and transforms)
 
 ## Installation
 
@@ -239,14 +252,16 @@ generated/
 Annotations are saved in JSONL format (`generated.jsonl`):
 
 ```json
-{"image":"00000001/00000001/00000001.png","text":"示例文本","length":248}
-{"image":"00000001/00000001/00000002.png","text":"Sample text","length":315}
+{"height":48, "path":"00000001/00000001/00000001.png","text":"示例文本", "vertical":true, "width":248}
+{"height":48, "path":"00000001/00000001/00000002.png","text":"Sample text", "vertical":false, "width":315}
 ```
 
 Each line contains:
-- `image`: Relative path to the image file
+- `height`: Image height in pixels
+- `path`: Relative path to the image file
 - `text`: The rendered text content
-- `length`: Image width in pixels
+- `width`: Image width in pixels
+- `vertical`: Whether the text is vertical
 
 ## Development
 

@@ -34,9 +34,10 @@ Controls the basic text sampling parameters and font selection strategy.
 | `font_list` | `["./fonts"]` | List of font files or directories containing fonts |
 
 #### Sample Strategies
-- **`font-first`**: Selects a font first, then samples text. Any characters not supported by the chosen font are discarded. (Fastest)
+- **`font-first`**: Selects a font first, then samples text. Any characters not supported by the chosen font are discarded.
+  > Note: This strategy may produce shorter text, and **fail generations** if none of the characters are supported in the chosen font.
 - **`sample-first`**: Samples text first, then finds a font that supports all characters. If none exists, chooses the font with the highest coverage and discards unsupported characters.
-- **`auto-fallback`**: Selects a primary font and samples text. For unsupported characters, it attempts to find a fallback font to render them. (Slowest but most comprehensive)
+- **`auto-fallback`**: Selects a primary font and samples text. For unsupported characters, it attempts to find a fallback font to render them. **auto-fallback is the default strategy and we recommend using it.**
 
 ### `random_config` Section
 
