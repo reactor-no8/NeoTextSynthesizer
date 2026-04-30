@@ -259,12 +259,8 @@ SingleLineImageResult SingleLineTextSynthesizer::generateSingleImage(
         backgroundImg = BackgroundSampler::getRandomCropBackground(backgroundImg, alphaMask.rows, alphaMask.cols);
     }
 
-    // Apply color to the alpha mask
-    cv::Mat textImg = alpha_blend::applyColorToAlphaMask(alphaMask, textColor);
-    
-    // Scale the rendered text image if needed
-    int origW = textImg.cols;
-    int origH = textImg.rows;
+    int origW = alphaMask.cols;
+    int origH = alphaMask.rows;
     double fontScale = static_cast<double>(origH) / fontSize;
 
     double scale = randDouble(scaleMin, scaleMax);
@@ -272,11 +268,11 @@ SingleLineImageResult SingleLineTextSynthesizer::generateSingleImage(
     {
         int nw = static_cast<int>(origW * scale);
         int nh = static_cast<int>(origH * scale);
-        cv::resize(textImg, textImg, cv::Size(nw, nh), 0, 0, cv::INTER_CUBIC);
+        cv::resize(alphaMask, alphaMask, cv::Size(nw, nh), 0, 0, cv::INTER_CUBIC);
     }
 
-    int scaledW = textImg.cols;
-    int scaledH = textImg.rows;
+    int scaledW = alphaMask.cols;
+    int scaledH = alphaMask.rows;
     int baseCw = scaledW;
     int baseCh = origH;
 
@@ -300,8 +296,16 @@ SingleLineImageResult SingleLineTextSynthesizer::generateSingleImage(
         drawY += static_cast<int>(randInt(vOffMin, vOffMax) * fontScale);
     }
 
-    // Blend text onto background
-    alpha_blend::blendImageOnto(textImg, backgroundImg, drawX, drawY);
+    if (backgroundImg.channels() != 3)
+    {
+        if (backgroundImg.channels() == 1)
+            cv::cvtColor(backgroundImg, backgroundImg, cv::COLOR_GRAY2BGR);
+        else if (backgroundImg.channels() == 4)
+            cv::cvtColor(backgroundImg, backgroundImg, cv::COLOR_BGRA2BGR);
+    }
+
+    // Blend alpha mask with text color onto background
+    alpha_blend::blendAlphaMaskOnto(alphaMask, backgroundImg, drawX, drawY, textColor);
     
     // Resize to output height
     int outW = static_cast<int>(static_cast<double>(backgroundImg.cols) * outputHeight / backgroundImg.rows);

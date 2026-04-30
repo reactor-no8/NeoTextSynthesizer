@@ -40,10 +40,10 @@ public:
     SingleLineRenderer(const SingleLineRenderer &) = delete;
     SingleLineRenderer &operator=(const SingleLineRenderer &) = delete;
     
-    // Renders text using the specified font, returning a mask with alpha channel only
+    // Renders text using the specified font, returning a single-channel alpha mask (CV_8UC1)
     cv::Mat renderTightText(std::string &text,
-                          size_t fontIndex,
-                          TextDirection direction);
+                           size_t fontIndex,
+                           TextDirection direction);
 
     // Get a cached glyph for rendering by its index
     const CachedGlyph *getGlyphByIndex(const FontResource &fontRes, uint32_t glyphIndex);

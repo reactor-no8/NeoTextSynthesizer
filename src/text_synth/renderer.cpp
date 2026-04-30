@@ -20,7 +20,7 @@ cv::Rect computeAlphaBoundingBox(const cv::Mat &img)
     {
         for (int c = 0; c < img.cols; ++c)
         {
-            if (img.at<cv::Vec4b>(r, c)[3] == 0)
+            if (img.at<uint8_t>(r, c) == 0)
             {
                 continue;
             }
@@ -143,13 +143,10 @@ cv::Mat SingleLineRenderer::renderTightText(std::string &text,
         }
         
         // Create a transparent canvas for alpha mask
-        cv::Mat alphaMask(canvasH, canvasW, CV_8UC4, cv::Scalar(0, 0, 0, 0));
+        cv::Mat alphaMask(canvasH, canvasW, CV_8UC1, cv::Scalar(0));
         
         const double baselineX = penX;
         const double baselineY = penY;
-        
-        // Create a white text color (will only use alpha channel)
-        cv::Vec4b textColor(255, 255, 255, 255);
         
         // Shape and render text
         ShapingOptions shapingOptions;
@@ -172,7 +169,7 @@ cv::Mat SingleLineRenderer::renderTightText(std::string &text,
                 if (glyph)
                 {
                     // Use the alpha blending function for glyphs
-                    alpha_blend::compositeGlyph(alphaMask, *glyph, drawX, drawY, textColor);
+                    alpha_blend::compositeGlyph(alphaMask, *glyph, drawX, drawY);
                 }
                 
                 penX += static_cast<double>(sg.xAdvance) / kHbScale;
