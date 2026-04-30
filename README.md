@@ -197,6 +197,7 @@ Controls output structure:
 | Parameter | Default | Description |
 |-----------|---------|-------------|
 | `output_height` | 48 | Output image height (width auto-calculated) |
+| `retry_on_error` | true | Whether to retry generation on error |
 | `out_dir` | ./generated | Output image directory |
 | `out_jsonl` | ./generated.jsonl | Annotation file path |
 | `batchsize` | 10000 | JSONL write batch size |
