@@ -29,7 +29,7 @@ GenerationResult SingleLineGenerationTask::executeTask()
     GenerationResult result;
     result.encodedData = std::move(encoded);
     result.json_data = {
-        {"text", text},
+        {"text", imageResult.text},
         {"width", imageResult.width},
         {"height", imageResult.height},
         {"vertical", imageResult.vertical}

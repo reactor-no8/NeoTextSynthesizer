@@ -50,8 +50,8 @@ SingleLineImageResult SingleLineTextSynthesizer::generateSingleImage(
     const bool vertical = randDouble(0, 1) < verticalProb;
 
     // Select a font
-    std::string mutableText = text;
-    size_t fontIndex = fontSelector.selectFont(mutableText, mutableText);
+    std::string mutableText;
+    size_t fontIndex = fontSelector.selectFont(text, mutableText);
     
     // Render text as alpha mask
     cv::Mat alphaMask = renderer.renderTightText(
