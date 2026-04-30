@@ -442,7 +442,7 @@ std::string TextSampler::generateString(int targetLen)
     double roll = randDouble(0.0, 1.0);
     while (UTF8Helper::Length(current) < targetLen)
     {
-        current += sampleRecursive(config_, roll);
+        current += UTF8Helper::Strip(sampleRecursive(config_, roll));
     }
     return UTF8Helper::Truncate(current, targetLen);
 }

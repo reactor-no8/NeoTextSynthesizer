@@ -78,6 +78,42 @@ std::string UTF8Helper::Truncate(const std::string &input, int codepointCount)
     return input.substr(0, i);
 }
 
+std::string UTF8Helper::Strip(const std::string &input)
+{
+    size_t start = 0;
+    size_t end = input.size();
+
+    while (start < end)
+    {
+        unsigned char c = static_cast<unsigned char>(input[start]);
+
+        if (c < 0x80 && std::isspace(c))
+        {
+            start++;
+        }
+        else
+        {
+            break;
+        }
+    }
+
+    while (end > start)
+    {
+        unsigned char c = static_cast<unsigned char>(input[end - 1]);
+        if (c < 0x80 && std::isspace(c))
+        {
+            end--;
+        }
+        else
+        {
+            break;
+        }
+    }
+
+    return input.substr(start, end - start);
+}
+
+
 size_t UTF8Helper::CharLenFromLead(unsigned char c)
 {
     if ((c & 0x80) == 0x00)
