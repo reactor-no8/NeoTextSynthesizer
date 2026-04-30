@@ -107,7 +107,6 @@ Controls the visual appearance of generated images.
 | Parameter | Default | Description |
 |-----------|---------|-------------|
 | `scale_range` | [0.7, 1.1] | Random scale factor range |
-| `recompute_width` | true | Recompute width after scaling |
 | `margin_range` | [-5, 20] | Random margin range in pixels |
 | `offset_prob` | 0.5 | Probability of applying position offset |
 | `h_offset_range` | [-7, 7] | Horizontal offset range |

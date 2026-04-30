@@ -26,7 +26,6 @@ post_process:
     partial_effect_prob: 0.8
   text_paste:
     scale_range: [0.7, 1.1]
-    recompute_width: true
     margin_range: [-5, 20]
     offset_prob: 0.5
     h_offset_range: [-7, 7]

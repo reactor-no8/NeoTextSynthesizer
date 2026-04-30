@@ -37,7 +37,6 @@ SingleLineImageResult SingleLineTextSynthesizer::generateSingleImage(
     const int fontSize = textCfg.value("font_size", 55);
     const double scaleMin = pasteCfg.contains("scale_range") ? pasteCfg["scale_range"][0].get<double>() : 1.0;
     const double scaleMax = pasteCfg.contains("scale_range") ? pasteCfg["scale_range"][1].get<double>() : 1.0;
-    const bool recomputeWidth = pasteCfg.value("recompute_width", false);
     const int mMin = pasteCfg["margin_range"][0].get<int>();
     const int mMax = pasteCfg["margin_range"][1].get<int>();
     const double offsetProb = pasteCfg.value("offset_prob", 0.0);
@@ -278,7 +277,7 @@ SingleLineImageResult SingleLineTextSynthesizer::generateSingleImage(
 
     int scaledW = textImg.cols;
     int scaledH = textImg.rows;
-    int baseCw = recomputeWidth ? scaledW : origW;
+    int baseCw = scaledW;
     int baseCh = origH;
 
     // Determine margins and drawing position
